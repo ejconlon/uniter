@@ -1,0 +1,13 @@
+cradle:
+  stack:
+    - path: "./src"
+      component: "uniter:lib"
+
+    - path: "./exe/Main.hs"
+      component: "uniter:exe:uniter-exe"
+
+    - path: "./exe/Paths_uniter.hs"
+      component: "uniter:exe:uniter-exe"
+
+    - path: "./test"
+      component: "uniter:test:uniter-test"
