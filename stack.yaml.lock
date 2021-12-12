@@ -3,7 +3,18 @@
 # For more information, please see the documentation at:
 #   https://docs.haskellstack.org/en/stable/lock_files
 
-packages: []
+packages:
+- completed:
+    name: overeasy
+    version: 0.1.0
+    git: git@github.com:ejconlon/overeasy.git
+    pantry-tree:
+      size: 2195
+      sha256: 98e6f1183da7a5dc034f62b81d8b7394f046730372365838bae8416e6e62f1bd
+    commit: ab431e365d2f13de7ddc1a032960a90e76b1cfc9
+  original:
+    git: git@github.com:ejconlon/overeasy.git
+    commit: ab431e365d2f13de7ddc1a032960a90e76b1cfc9
 snapshots:
 - completed:
     size: 586296

@@ -15,6 +15,7 @@ description: Please see the README on GitHub at <https://github.com/githubuser/u
 
 dependencies:
 - base >= 4.12 && < 5
+- overeasy
 # TODO trim deps
 - free
 - recursion-schemes
@@ -43,6 +44,7 @@ default-extensions:
 - LambdaCase
 - KindSignatures
 - MultiParamTypeClasses
+- PatternSynonyms
 - Rank2Types
 - ScopedTypeVariables
 - StandaloneDeriving

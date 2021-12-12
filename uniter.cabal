@@ -25,6 +25,7 @@ source-repository head
 library
   exposed-modules:
       Uniter
+      Uniter.Example
   other-modules:
       Paths_uniter
   hs-source-dirs:
@@ -47,6 +48,7 @@ library
       LambdaCase
       KindSignatures
       MultiParamTypeClasses
+      PatternSynonyms
       Rank2Types
       ScopedTypeVariables
       StandaloneDeriving
@@ -62,6 +64,7 @@ library
     , free
     , hashable
     , mtl
+    , overeasy
     , recursion-schemes
     , text
     , transformers
@@ -93,6 +96,7 @@ test-suite uniter-test
       LambdaCase
       KindSignatures
       MultiParamTypeClasses
+      PatternSynonyms
       Rank2Types
       ScopedTypeVariables
       StandaloneDeriving
@@ -108,6 +112,7 @@ test-suite uniter-test
     , free
     , hashable
     , mtl
+    , overeasy
     , recursion-schemes
     , tasty
     , tasty-hunit
