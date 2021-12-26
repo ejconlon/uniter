@@ -22,6 +22,7 @@ dependencies:
 - containers
 - unordered-containers
 - hashable
+- logict
 - text
 - transformers
 - mtl

@@ -26,6 +26,8 @@ library
   exposed-modules:
       Uniter
       Uniter.Example
+      Uniter.Exp
+      Uniter.Scratch
   other-modules:
       Paths_uniter
   hs-source-dirs:
@@ -63,6 +65,7 @@ library
     , containers
     , free
     , hashable
+    , logict
     , mtl
     , overeasy
     , recursion-schemes
@@ -111,6 +114,7 @@ test-suite uniter-test
     , containers
     , free
     , hashable
+    , logict
     , mtl
     , overeasy
     , recursion-schemes

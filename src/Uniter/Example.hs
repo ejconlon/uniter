@@ -1,11 +1,10 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Uniter.Example where
 
 import Control.Monad.Except (Except, MonadError, runExcept, ExceptT, runExceptT)
 import Control.Monad.State.Strict (State, MonadState (..), gets, modify', runState, StateT (runStateT))
 import Data.Foldable (foldMap')
-import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Hashable (Hashable)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -14,25 +13,12 @@ import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
-import Overeasy.Expressions.Free (Free)
+import Overeasy.Expressions.Free (Free, pattern FreeEmbed, pattern FreePure)
+import Uniter.Exp (Exp (..), Ty, TyF (..))
+import Control.Monad.Logic (LogicT)
+import Control.Applicative (Alternative (..))
 
-data Exp =
-    ExpConst
-  | ExpUseBind !String
-  | ExpDefBind !String Exp Exp
-  | ExpTuple Exp Exp
-  | ExpFirst Exp
-  | ExpSecond Exp
-  deriving stock (Eq, Show)
-
-makeBaseFunctor ''Exp
-
-data Ty =
-    TyPair Ty Ty
-  | TyConst
-  deriving stock (Eq, Show)
-
-makeBaseFunctor ''Ty
+data Void1 a
 
 data Aligned f a b =
     AlignedVars !a !b
@@ -40,22 +26,43 @@ data Aligned f a b =
   | AlignedStructB !(f a) !b
   deriving stock (Eq, Show)
 
-alignFreeTy :: Free TyF a -> Free TyF b -> Maybe (Seq (Aligned (Free TyF) a b))
-alignFreeTy fa fb =
-  case fa of
-    _ -> undefined
+newtype Embed f a = Embed { unEmbed :: f (Free f a) }
+deriving stock instance Eq (f (Free f a)) => Eq (Embed f a)
+deriving stock instance Show (f (Free f a)) => Show (Embed f a)
 
-alignTyF :: TyF (Free TyF a) -> TyF (Free TyF b) -> Maybe (Seq (Aligned (Free TyF) a b))
-alignTyF ta tb =
-  case ta of
-    TyConstF ->
-      case tb of
-        TyConstF -> Just Empty
-        _ -> Nothing
-    TyPairF fa1 fa2 ->
-      case tb of
-        TyConstF -> Nothing
-        TyPairF fb1 fb2 -> (<>) <$> alignFreeTy fa1 fb1 <*> alignFreeTy fa2 fb2
+class Alignable m g f where
+  align :: f a -> f b -> LogicT m (Aligned g a b)
+
+instance Alignable m Void1 f => Alignable m (Embed f) (Free f) where
+  align fa fb =
+    case fa of
+      FreePure a ->
+        case fb of
+          FreePure b -> pure (AlignedVars a b)
+          FreeEmbed tb -> pure (AlignedStructA a (Embed tb))
+      FreeEmbed ta ->
+        case fb of
+          FreePure b -> pure (AlignedStructB (Embed ta) b)
+          FreeEmbed tb -> align (Embed ta) (Embed tb)
+
+instance Alignable m Void1 f => Alignable m (Embed f) (Embed f) where
+  align (Embed ta) (Embed tb) = fixAlign (align ta tb) where
+    fixAlign :: LogicT m (Aligned Void1 (Free f a) (Free f b)) -> LogicT m (Aligned (Embed f) a b)
+    fixAlign xs = xs >>= bindAlign
+    bindAlign :: Aligned Void1 (Free f a) (Free f b) -> LogicT m (Aligned (Embed f) a b)
+    bindAlign (AlignedVars fa fb) = align fa fb
+
+instance MonadFail m => Alignable m Void1 TyF where
+  align ta tb =
+    case ta of
+      TyConstF ->
+        case tb of
+          TyConstF -> empty
+          _ -> fail "const error"
+      TyPairF fa1 fa2 ->
+        case tb of
+          TyConstF -> fail "pair error"
+          TyPairF fb1 fb2 -> pure (AlignedVars fa1 fb1) <|> pure (AlignedVars fa2 fb2)
 
 exampleLinear :: Exp
 exampleLinear =
@@ -78,46 +85,37 @@ newtype VarId = VarId { unVarId :: Int }
   deriving stock (Show)
   deriving newtype (Eq, Ord, Hashable, Enum)
 
-newtype TyRel = VM { unVM :: Map VarId (Free TyF VarId) }
-  -- deriving stock (Show)
-  -- deriving newtype (Eq)
+newtype Part f = Part { unPart :: Free f VarId }
+deriving newtype instance Eq (f (Free f VarId)) => Eq (Part f)
+deriving stock instance Show (f (Free f VarId)) => Show (Part f)
 
--- emptyVM :: VM
--- emptyVM = VM Map.empty
+newtype TyRel f = TyRel { unTyRel :: Map VarId (Part f) }
+deriving newtype instance Eq (f (Free f VarId)) => Eq (TyRel f)
+deriving stock instance Show (f (Free f VarId)) => Show (TyRel f)
 
--- lookupVM :: VarId -> VM -> Maybe Val
--- lookupVM k (VM m) = Map.lookup k m
+newtype TyEnv f = TyEnv { unTyEnv :: Map String (Part f) }
+deriving newtype instance Eq (f (Free f VarId)) => Eq (TyEnv f)
+deriving stock instance Show (f (Free f VarId)) => Show (TyEnv f)
 
--- singletonVM :: VarId -> Val -> VM
--- singletonVM k v = VM (Map.singleton k v)
-
--- unionVM :: VM -> VM -> VM
--- unionVM (VM m1) (VM m2) = VM (Map.union m1 m2)
-
-newtype TyEnv = TyEnv { unTyEnv :: Map String Ty }
-  deriving stock (Show)
-  deriving newtype (Eq)
-
-data St = St
+data St f = St
   { stUniq :: !VarId
-  , stTyEnv :: !TyEnv
-  , stTyRel :: !TyRel
-  } -- deriving stock (Eq, Show)
+  , stTyEnv :: !(TyEnv f)
+  , stTyRel :: !(TyRel f)
+  }
+deriving stock instance Eq (f (Free f VarId)) => Eq (St f)
+deriving stock instance Show (f (Free f VarId)) => Show (St f)
 
-data Err = ErrFail !String
-  deriving stock (Eq, Show)
+newtype M e f a = M { unM :: ExceptT e (State (St f)) a }
+  deriving newtype (Functor, Applicative, Monad, MonadState (St f), MonadError e)
 
-newtype M a = M { unM :: ExceptT Err (State St) a }
-  deriving newtype (Functor, Applicative, Monad, MonadState St, MonadError Err)
-
-runM :: M a -> St -> (Either Err a, St)
+runM :: M e f a -> St f -> (Either e a, St f)
 runM = runState . runExceptT . unM
 
--- class Substitutable x where
---   subReplace :: VM -> x -> x
---   subFreeVars :: x -> Set VarId
+class Substitutable f x | x -> f where
+  subReplace :: TyRel f -> x -> x
+  subFreeVars :: x -> Set VarId
 
--- instance Substitutable Val where
+-- instance Substitutable f (Part f) where
 --   subReplace (VM s) = go where
 --     go = \case
 --       ValPair v w -> ValPair (go v) (go w)
@@ -128,19 +126,19 @@ runM = runState . runExceptT . unM
 --     ValVar i -> Set.singleton i
 --     _ -> Set.empty
 
--- instance Substitutable VM where
+-- instance Substitutable f (TyRel f) where
 --   subReplace m@(VM s) (VM t) = VM (Map.union s (Map.map (subReplace m) t))
 --   subFreeVars = foldMap' subFreeVars . unVM
 
--- newVarM :: M Val
--- newVarM = state $ \st ->
---   let fresh = stUniq st
---       st' = st { stUniq = succ fresh }
---   in (ValVar fresh, st')
+newVarM :: M e f VarId
+newVarM = state $ \st ->
+  let fresh = stUniq st
+      st' = st { stUniq = succ fresh }
+  in (fresh, st')
 
--- replaceM :: Val -> M Val
+-- replaceM :: Part f -> M e f (Part f)
 -- replaceM v = do
---   m <- gets stVM
+--   m <- gets stTyEnv
 --   pure (subReplace m v)
 
 -- valUnifyM :: Val -> Val -> M Val
@@ -152,7 +150,7 @@ runM = runState . runExceptT . unM
 --           ValConst -> pure v
 --           _ -> pure (ValErr "fail")
 
--- withEnvM :: (Env -> Env) -> M a -> M a
+-- withEnvM :: (Env f -> Env f) -> M f a -> M f a
 -- withEnvM f act = do
 --   env <- gets stEnv
 --   modify' (\st -> st { stEnv = f env })
@@ -160,7 +158,7 @@ runM = runState . runExceptT . unM
 --   modify' (\st -> st { stEnv = env})
 --   pure ret
 
--- expM :: Exp -> M Val
+-- expM :: Exp -> M TyF (Part TyF)
 -- expM = \case
 --   ExpConst -> pure ValConst
 --   ExpUseBind n -> do
