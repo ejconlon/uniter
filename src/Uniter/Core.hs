@@ -18,7 +18,7 @@ module Uniter.Core
   , EventF (..)
   , EventStream
   , nextStreamEvent
-  , runUniter
+  , streamUniter
   ) where
 
 import Control.DeepSeq (NFData)
@@ -132,5 +132,5 @@ subInterpESM = \case
       UniterAddNode n k -> state (\b -> (b, succ b)) >>= \i -> S.wrap (EventAddNode n i (subInterpESM (k i)))
       UniterFresh k -> state (\b -> (b, succ b)) >>= \i -> S.wrap (EventFresh i (subInterpESM (k i)))
 
-runUniter :: UniterM e f r -> FreeEnv -> BoundId -> EventStream e f (r, BoundId)
-runUniter u env bid = S.hoist (\x -> Identity (fst (runE x env bid))) (interpESM u >>= \r -> get >>= \bid' -> pure (r, bid'))
+streamUniter :: UniterM e f r -> FreeEnv -> BoundId -> EventStream e f (r, BoundId)
+streamUniter u env bid = S.hoist (\x -> Identity (fst (runE x env bid))) (interpESM u >>= \r -> get >>= \bid' -> pure (r, bid'))

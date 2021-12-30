@@ -1,5 +1,17 @@
 module Uniter.Scratch () where
 
+-- data Pair a b = Pair !a !b
+--   deriving stock (Eq, Show, Ord, Generic)
+--   deriving anyclass (Hashable, NFData)
+
+-- newtype Part f = Part { unPart :: Free f BoundId }
+-- deriving newtype instance Eq (f (Free f BoundId)) => Eq (Part f)
+-- deriving stock instance Show (f (Free f BoundId)) => Show (Part f)
+
+-- makePart :: (Recursive t, Base t ~ f) => t -> Part f
+-- makePart = Part . go where
+--   go = FreeEmbed . fmap go . project
+
 -- data Void1 a
 
 -- data Aligned f a b =
