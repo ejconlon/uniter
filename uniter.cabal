@@ -63,15 +63,14 @@ library
   build-depends:
       base >=4.12 && <5
     , containers
-    , free
+    , deepseq
     , hashable
-    , logict
     , mtl
     , overeasy
     , recursion-schemes
+    , streaming
     , text
     , transformers
-    , unordered-containers
   default-language: Haskell2010
 
 test-suite uniter-test
@@ -112,16 +111,15 @@ test-suite uniter-test
   build-depends:
       base >=4.12 && <5
     , containers
-    , free
+    , deepseq
     , hashable
-    , logict
     , mtl
     , overeasy
     , recursion-schemes
+    , streaming
     , tasty
     , tasty-hunit
     , text
     , transformers
     , uniter
-    , unordered-containers
   default-language: Haskell2010

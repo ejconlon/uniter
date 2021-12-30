@@ -17,12 +17,14 @@ dependencies:
 - base >= 4.12 && < 5
 - overeasy
 # TODO trim deps
-- free
+- deepseq
+# - free
+- streaming
 - recursion-schemes
 - containers
-- unordered-containers
+# - unordered-containers
 - hashable
-- logict
+# - logict
 - text
 - transformers
 - mtl
