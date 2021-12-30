@@ -63,7 +63,7 @@ data UniterF e f m a =
     UniterThrowError !(UniterError e)
   | UniterLookupFree !FreeName !(Maybe BoundId -> a)
   | UniterAssignFree !FreeName !BoundId (m a)
-  | UniterEmitEq !BoundId !BoundId a
+  | UniterEmitEq !BoundId !BoundId !(BoundId -> a)
   | UniterAddNode !(Node f) !(BoundId -> a)
   | UniterFresh !(BoundId -> a)
   deriving stock (Functor)
@@ -83,8 +83,8 @@ uniterIndexFree n = uniterLookupFree n >>= maybe (uniterThrowError (UniterErrorM
 uniterAssignFree :: FreeName -> BoundId -> UniterM e f a -> UniterM e f a
 uniterAssignFree x i act = UniterM (FreeEmbed (UniterAssignFree x i (fmap pure act)))
 
-uniterEmitEq :: BoundId -> BoundId -> UniterM e f ()
-uniterEmitEq i j = UniterM (FreeEmbed (UniterEmitEq i j (pure ())))
+uniterEmitEq :: BoundId -> BoundId -> UniterM e f BoundId
+uniterEmitEq i j = UniterM (FreeEmbed (UniterEmitEq i j pure))
 
 uniterAddNode :: Node f -> UniterM e f BoundId
 uniterAddNode n = UniterM (FreeEmbed (UniterAddNode n pure))
@@ -98,7 +98,7 @@ instance MonadFail (UniterM e f) where
 data EventF e f a =
     EventError !(UniterError e)
   | EventAddNode !(Node f) !BoundId a
-  | EventEmitEq !BoundId !BoundId a
+  | EventEmitEq !BoundId !BoundId !BoundId a
   | EventFresh !BoundId a
   deriving stock (Functor, Foldable, Traversable)
 deriving stock instance (Eq e, Eq (f BoundId), Eq a) => Eq (EventF e f a)
@@ -128,9 +128,9 @@ subInterpESM = \case
       UniterThrowError e -> S.yields (EventError e)
       UniterLookupFree i k -> asks (Map.lookup i . unFreeEnv) >>= subInterpESM . k
       UniterAssignFree x i act -> local (\(FreeEnv m) -> FreeEnv (Map.insert x i m)) (interpESM act >>= subInterpESM)
-      UniterEmitEq i j k -> S.wrap (EventEmitEq i j (subInterpESM k))
-      UniterAddNode n k -> state (\i -> (i, succ i)) >>= \i -> S.wrap (EventAddNode n i (subInterpESM (k i)))
-      UniterFresh k -> state (\i -> (i, succ i)) >>= \i -> S.wrap (EventFresh i (subInterpESM (k i)))
+      UniterEmitEq i j k -> state (\b -> (b, succ b)) >>= \y -> S.wrap (EventEmitEq i j y (subInterpESM (k y)))
+      UniterAddNode n k -> state (\b -> (b, succ b)) >>= \i -> S.wrap (EventAddNode n i (subInterpESM (k i)))
+      UniterFresh k -> state (\b -> (b, succ b)) >>= \i -> S.wrap (EventFresh i (subInterpESM (k i)))
 
 runUniter :: UniterM e f r -> FreeEnv -> BoundId -> EventStream e f (r, BoundId)
 runUniter u env bid = S.hoist (\x -> Identity (fst (runE x env bid))) (interpESM u >>= \r -> get >>= \bid' -> pure (r, bid'))

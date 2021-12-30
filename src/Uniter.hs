@@ -4,16 +4,16 @@ module Uniter where
 
 import Data.Coerce (Coercible)
 import Data.Foldable (Foldable (foldMap'))
-import Data.Hashable (Hashable)
+-- import Data.Hashable (Hashable)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Overeasy.Expressions.Free (Free, pattern FreeEmbed, pattern FreePure)
 import Overeasy.IntLike.Set (IntLikeSet)
 import qualified Overeasy.IntLike.Set as ILS
 
-newtype Var = Var { unVar :: Int }
-  deriving stock (Show)
-  deriving newtype (Eq, Ord, Hashable)
+-- newtype Var = Var { unVar :: Int }
+--   deriving stock (Show)
+--   deriving newtype (Eq, Ord, Hashable)
 
 class Monoid (n a) => SingletonMonoid n a where
   singletonMonoid :: a -> n a

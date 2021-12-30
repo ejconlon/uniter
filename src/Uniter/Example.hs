@@ -41,11 +41,9 @@ expM = \case
     w <- uniterFresh
     zy <- uniterAddNode (Node (TyPairF v w))
     uniterEmitEq zx zy
-    pure zx
   ExpSecond x -> do
     zx <- expM x
     v <- uniterFresh
     w <- uniterFresh
     zy <- uniterAddNode (Node (TyPairF v w))
     uniterEmitEq zx zy
-    pure zx
