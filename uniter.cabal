@@ -25,6 +25,7 @@ source-repository head
 library
   exposed-modules:
       Uniter
+      Uniter.Core
       Uniter.Example
       Uniter.Exp
       Uniter.Scratch
