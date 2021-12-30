@@ -28,6 +28,7 @@ library
       Uniter.Core
       Uniter.Example
       Uniter.Exp
+      Uniter.Graph
       Uniter.Scratch
   other-modules:
       Paths_uniter

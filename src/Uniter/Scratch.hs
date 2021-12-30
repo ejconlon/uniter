@@ -2,10 +2,6 @@ module Uniter.Scratch () where
 
 -- data Void1 a
 
--- data Pair a b = Pair !a !b
---   deriving stock (Eq, Show, Ord, Generic)
---   deriving anyclass (Hashable, NFData)
-
 -- data Aligned f a b =
 --     AlignedVars !a !b
 --   | AlignedStructA !a !(f b)
@@ -59,34 +55,6 @@ module Uniter.Scratch () where
 --           TyConstF -> fail "pair error"
 --           TyPairF fb1 fb2 -> pure (Pair fa1 fb1) <|> pure (Pair fa2 fb2)
 
--- newtype Part f = Part { unPart :: Free f BoundId }
--- deriving newtype instance Eq (f (Free f BoundId)) => Eq (Part f)
--- deriving stock instance Show (f (Free f BoundId)) => Show (Part f)
-
--- makePart :: (Recursive t, Base t ~ f) => t -> Part f
--- makePart = Part . go where
---   go = FreeEmbed . fmap go . project
-
--- newtype Node f = Node { unNode :: f BoundId }
--- deriving newtype instance Eq (f BoundId) => Eq (Node f)
--- deriving stock instance Show (f BoundId) => Show (Node f)
-
--- data Join f =
---     JoinRoot !(Node f)
---   | JoinLeaf !BoundId
--- deriving stock instance Eq (f BoundId) => Eq (Join f)
--- deriving stock instance Show (f BoundId) => Show (Join f)
-
--- newtype BoundEnv f = BoundEnv { unBoundEnv :: Map BoundId (Join f) }
--- deriving newtype instance Eq (f BoundId) => Eq (BoundEnv f)
--- deriving stock instance Show (f BoundId) => Show (BoundEnv f)
-
--- lookupWholeVar :: (Corecursive t, Base t ~ f, Traversable f) => BoundEnv f -> BoundId -> Either BoundId t
--- lookupWholeVar b@(BoundEnv m) v =
---   case Map.lookup v m of
---     Nothing -> Left v
---     Just (Part w) -> lookupWholeFree b w
-
 -- lookupWholePart :: (Corecursive t, Base t ~ f, Traversable f) => BoundEnv f -> Part f -> Either BoundId t
 -- lookupWholePart b = lookupWholeFree b . unPart
 
@@ -95,7 +63,6 @@ module Uniter.Scratch () where
 --   case w of
 --     FreePure v -> lookupWholeVar b v
 --     FreeEmbed ff -> fmap embed (traverse (lookupWholeFree b) ff)
-
 
 -- type BoundEq = Pair BoundId BoundId
 
