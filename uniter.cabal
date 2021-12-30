@@ -25,6 +25,7 @@ source-repository head
 library
   exposed-modules:
       Uniter
+      Uniter.Align
       Uniter.Core
       Uniter.Example
       Uniter.Exp

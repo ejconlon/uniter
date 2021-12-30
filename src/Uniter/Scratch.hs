@@ -1,8 +1,5 @@
 module Uniter.Scratch () where
 
--- data Pair a b = Pair !a !b
---   deriving stock (Eq, Show, Ord, Generic)
---   deriving anyclass (Hashable, NFData)
 
 -- newtype Part f = Part { unPart :: Free f BoundId }
 -- deriving newtype instance Eq (f (Free f BoundId)) => Eq (Part f)

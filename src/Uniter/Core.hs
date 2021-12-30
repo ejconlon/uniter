@@ -19,9 +19,11 @@ module Uniter.Core
   , EventStream
   , nextStreamEvent
   , streamUniter
+  , Unitable (..)
   ) where
 
 import Control.DeepSeq (NFData)
+import Control.Exception (Exception)
 import Control.Monad.Identity (Identity (..))
 import Control.Monad.Reader (MonadReader (..), ReaderT (..), asks)
 import Control.Monad.State.Strict (MonadState (..), State, runState)
@@ -30,6 +32,7 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.String (IsString)
 import Data.Text (Text)
+import Data.Typeable (Typeable)
 import Overeasy.Expressions.Free (Free, pattern FreeEmbed, pattern FreePure)
 import Streaming (Stream)
 import qualified Streaming as S
@@ -57,7 +60,9 @@ data UniterError e =
     UniterErrorFail !String
   | UniterErrorMissingFree !FreeName
   | UniterErrorEmbed !e
-  deriving stock (Eq, Show)
+  deriving stock (Eq, Show, Typeable)
+
+instance (Show e, Typeable e) => Exception (UniterError e)
 
 data UniterF e f m a =
     UniterThrowError !(UniterError e)
@@ -134,3 +139,6 @@ subInterpESM = \case
 
 streamUniter :: UniterM e f r -> FreeEnv -> BoundId -> EventStream e f (r, BoundId)
 streamUniter u env bid = S.hoist (\x -> Identity (fst (runE x env bid))) (interpESM u >>= \r -> get >>= \bid' -> pure (r, bid'))
+
+class Unitable e g t where
+  unite :: t -> UniterM e g BoundId
