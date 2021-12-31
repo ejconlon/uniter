@@ -78,14 +78,17 @@ data UniterF e f m a =
 newtype UniterM e f a = UniterM { unUniterM :: Free (UniterF e f (UniterM e f)) a }
   deriving newtype (Functor, Applicative, Monad)
 
-uniterThrowError :: UniterError e -> UniterM e f a
-uniterThrowError = UniterM . FreeEmbed . UniterThrowError
+uniterThrowErrorInternal :: UniterError e -> UniterM e f a
+uniterThrowErrorInternal = UniterM . FreeEmbed . UniterThrowError
+
+uniterThrowError :: e -> UniterM e f a
+uniterThrowError = uniterThrowErrorInternal . UniterErrorEmbed
 
 uniterLookupFree :: FreeName -> UniterM e f (Maybe BoundId)
 uniterLookupFree x = UniterM (FreeEmbed (UniterLookupFree x pure))
 
 uniterIndexFree :: FreeName -> UniterM e f BoundId
-uniterIndexFree n = uniterLookupFree n >>= maybe (uniterThrowError (UniterErrorMissingFree n)) pure
+uniterIndexFree n = uniterLookupFree n >>= maybe (uniterThrowErrorInternal (UniterErrorMissingFree n)) pure
 
 uniterAssignFree :: FreeName -> BoundId -> UniterM e f a -> UniterM e f a
 uniterAssignFree x i act = UniterM (FreeEmbed (UniterAssignFree x i (fmap pure act)))
@@ -100,7 +103,7 @@ uniterFresh :: UniterM e f BoundId
 uniterFresh = UniterM (FreeEmbed (UniterFresh pure))
 
 instance MonadFail (UniterM e f) where
-  fail = uniterThrowError . UniterErrorFail
+  fail = uniterThrowErrorInternal . UniterErrorFail
 
 data EventF e f a =
     EventError !(UniterError e)
