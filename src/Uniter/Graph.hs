@@ -6,6 +6,7 @@ module Uniter.Graph
   , emptyBoundEnv
   , resolveVar
   , resolveNode
+  , emitGraph
   , GraphM
   , graphResolveVar
   , graphResolveNode
@@ -21,6 +22,7 @@ import Control.Monad ((>=>))
 import Control.Monad.Except (Except, MonadError (..))
 import Control.Monad.Reader (MonadReader (..), ReaderT)
 import Control.Monad.State.Strict (MonadState (..), State, StateT, gets, modify', runState)
+import Data.Foldable (traverse_)
 import Data.Functor.Foldable (Base, Corecursive (..), Recursive (..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -29,7 +31,6 @@ import Uniter.Core (BoundId, EventHandler (..), EventStream, FreeEnv, Node (..),
 
 data Join f =
     JoinRoot !(Node f)
-  | JoinLeaf !BoundId
   | JoinEq !BoundId !BoundId
   | JoinFresh
 deriving stock instance Eq (f BoundId) => Eq (Join f)
@@ -49,11 +50,18 @@ resolveVar v b@(BoundEnv m) =
     Just j ->
       case j of
         JoinRoot x -> resolveNode x b
-        JoinLeaf x -> resolveVar x b
         _ -> Left v
 
 resolveNode :: (Corecursive t, Base t ~ f, Traversable f) => Node f -> BoundEnv f -> Either BoundId t
 resolveNode n b = fmap embed (traverse (`resolveVar` b) (unNode n))
+
+emitGraph :: EventHandler e f m => BoundEnv f -> m ()
+emitGraph = traverse_ go . Map.toList . unBoundEnv where
+  go (y, x) =
+    case x of
+      JoinRoot n -> handleAddNode n y
+      JoinEq i j -> handleEmitEq i j y
+      JoinFresh -> handleFresh y
 
 data GraphState f = GraphState
   { gsUnique :: !BoundId
