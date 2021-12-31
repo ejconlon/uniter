@@ -10,11 +10,11 @@ packages:
     git: git@github.com:ejconlon/overeasy.git
     pantry-tree:
       size: 2195
-      sha256: 98e6f1183da7a5dc034f62b81d8b7394f046730372365838bae8416e6e62f1bd
-    commit: ab431e365d2f13de7ddc1a032960a90e76b1cfc9
+      sha256: c0ec2e199714d013c34b7fa709b871113cd29bf6fc0fdf7dc632137a3b8b72b0
+    commit: 7682ce906a3a446156e274c507e746978e076d0e
   original:
     git: git@github.com:ejconlon/overeasy.git
-    commit: ab431e365d2f13de7ddc1a032960a90e76b1cfc9
+    commit: 7682ce906a3a446156e274c507e746978e076d0e
 snapshots:
 - completed:
     size: 586296

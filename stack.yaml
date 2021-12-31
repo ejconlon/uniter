@@ -8,4 +8,4 @@ packages:
 
 extra-deps:
 - git: git@github.com:ejconlon/overeasy.git
-  commit: ab431e365d2f13de7ddc1a032960a90e76b1cfc9
+  commit: 7682ce906a3a446156e274c507e746978e076d0e
