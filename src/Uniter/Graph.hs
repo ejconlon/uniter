@@ -1,12 +1,12 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Uniter.Graph
-  ( Join (..)
+  ( Elem (..)
   , BoundEnv (..)
   , emptyBoundEnv
   , resolveVar
   , resolveNode
-  , emitGraph
+  , handleElems
   , GraphM
   , graphResolveVar
   , graphResolveNode
@@ -29,14 +29,14 @@ import qualified Data.Map.Strict as Map
 import Uniter.Core (BoundId, EventHandler (..), EventStream, FreeEnv, Node (..), UniterError, UniterM, handleEvents,
                     streamUniter)
 
-data Join f =
-    JoinRoot !(Node f)
-  | JoinEq !BoundId !BoundId
-  | JoinFresh
-deriving stock instance Eq (f BoundId) => Eq (Join f)
-deriving stock instance Show (f BoundId) => Show (Join f)
+data Elem f =
+    ElemNode !(Node f)
+  | ElemEq !BoundId !BoundId
+  | ElemFresh
+deriving stock instance Eq (f BoundId) => Eq (Elem f)
+deriving stock instance Show (f BoundId) => Show (Elem f)
 
-newtype BoundEnv f = BoundEnv { unBoundEnv :: Map BoundId (Join f) }
+newtype BoundEnv f = BoundEnv { unBoundEnv :: Map BoundId (Elem f) }
 deriving newtype instance Eq (f BoundId) => Eq (BoundEnv f)
 deriving stock instance Show (f BoundId) => Show (BoundEnv f)
 
@@ -49,19 +49,19 @@ resolveVar v b@(BoundEnv m) =
     Nothing -> Left v
     Just j ->
       case j of
-        JoinRoot x -> resolveNode x b
+        ElemNode x -> resolveNode x b
         _ -> Left v
 
 resolveNode :: (Corecursive t, Base t ~ f, Traversable f) => Node f -> BoundEnv f -> Either BoundId t
 resolveNode n b = fmap embed (traverse (`resolveVar` b) (unNode n))
 
-emitGraph :: EventHandler e f m => BoundEnv f -> m ()
-emitGraph = traverse_ go . Map.toList . unBoundEnv where
+handleElems :: EventHandler e f m => BoundEnv f -> m ()
+handleElems = traverse_ go . Map.toList . unBoundEnv where
   go (y, x) =
     case x of
-      JoinRoot n -> handleAddNode n y
-      JoinEq i j -> handleEmitEq i j y
-      JoinFresh -> handleFresh y
+      ElemNode n -> handleAddNode n y
+      ElemEq i j -> handleEmitEq i j y
+      ElemFresh -> handleFresh y
 
 data GraphState f = GraphState
   { gsUnique :: !BoundId
@@ -81,7 +81,7 @@ graphInsertTerm = cata (sequence >=> graphInsertNode . Node)
 
 graphInsertNode :: Node f -> GraphM f BoundId
 graphInsertNode n = state $ \(GraphState uniq (BoundEnv m)) ->
-  let m' = Map.insert uniq (JoinRoot n) m
+  let m' = Map.insert uniq (ElemNode n) m
   in (uniq, GraphState (succ uniq) (BoundEnv m'))
 
 newtype AppM e f a = AppM { unAppM :: ReaderT FreeEnv (StateT (GraphState f) (Except (UniterError e))) a }
@@ -96,14 +96,14 @@ streamUniterA u = do
   uniq <- gets gsUnique
   pure (streamUniter u env uniq)
 
-modifyBoundEnvA :: (Map BoundId (Join f) -> Map BoundId (Join f)) -> AppM e f ()
+modifyBoundEnvA :: (Map BoundId (Elem f) -> Map BoundId (Elem f)) -> AppM e f ()
 modifyBoundEnvA f = modify' (\st -> st { gsBoundEnv = BoundEnv (f (unBoundEnv (gsBoundEnv st))) })
 
 instance EventHandler e f (AppM e f) where
   handleError = throwError
-  handleAddNode n i = modifyBoundEnvA (Map.insert i (JoinRoot n))
-  handleEmitEq i j y = modifyBoundEnvA (Map.insert y (JoinEq i j))
-  handleFresh i = modifyBoundEnvA (Map.insert i JoinFresh)
+  handleAddNode n i = modifyBoundEnvA (Map.insert i (ElemNode n))
+  handleEmitEq i j y = modifyBoundEnvA (Map.insert y (ElemEq i j))
+  handleFresh i = modifyBoundEnvA (Map.insert i ElemFresh)
 
 appUniter :: UniterM e f a -> AppM e f a
 appUniter u = do
