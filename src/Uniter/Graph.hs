@@ -21,11 +21,10 @@ import Control.Monad ((>=>))
 import Control.Monad.Except (Except, MonadError (..))
 import Control.Monad.Reader (MonadReader (..), ReaderT)
 import Control.Monad.State.Strict (MonadState (..), State, StateT, gets, modify', runState)
-import Data.Functor (($>))
 import Data.Functor.Foldable (Base, Corecursive (..), Recursive (..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Uniter.Core (BoundId, EventF (..), EventStream, FreeEnv, Node (..), UniterError, UniterM, nextStreamEvent,
+import Uniter.Core (BoundId, EventHandler (..), EventStream, FreeEnv, Node (..), UniterError, UniterM, handleEvents,
                     streamUniter)
 
 data Join f =
@@ -92,26 +91,18 @@ streamUniterA u = do
 modifyBoundEnvA :: (Map BoundId (Join f) -> Map BoundId (Join f)) -> AppM e f ()
 modifyBoundEnvA f = modify' (\st -> st { gsBoundEnv = BoundEnv (f (unBoundEnv (gsBoundEnv st))) })
 
-addNodeA :: Node f -> BoundId -> AppM e f ()
-addNodeA n i = modifyBoundEnvA (Map.insert i (JoinRoot n))
-
-emitEqA :: BoundId -> BoundId -> BoundId -> AppM e f ()
-emitEqA i j y = modifyBoundEnvA (Map.insert y (JoinEq i j))
-
-freshA :: BoundId -> AppM e f ()
-freshA i = modifyBoundEnvA (Map.insert i JoinFresh)
+instance EventHandler e f (AppM e f) where
+  handleError = throwError
+  handleAddNode n i = modifyBoundEnvA (Map.insert i (JoinRoot n))
+  handleEmitEq i j y = modifyBoundEnvA (Map.insert y (JoinEq i j))
+  handleFresh i = modifyBoundEnvA (Map.insert i JoinFresh)
 
 appUniter :: UniterM e f a -> AppM e f a
-appUniter = streamUniterA >=> go where
-  go es =
-    case nextStreamEvent es of
-      Left (r, uniq) -> modify' (\st -> st { gsUnique = uniq }) $> r
-      Right ef ->
-        case ef of
-          EventError e -> throwError e
-          EventAddNode n i tl -> addNodeA n i *> go tl
-          EventEmitEq i j y tl -> emitEqA i j y *> go tl
-          EventFresh i tl -> freshA i *> go tl
+appUniter u = do
+  es <- streamUniterA u
+  (r, uniq) <- handleEvents es
+  modify' (\st -> st { gsUnique = uniq })
+  pure r
 
 appGraph :: GraphM f a -> AppM e f a
 appGraph = state . runState

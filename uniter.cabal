@@ -30,6 +30,7 @@ library
       Uniter.Example
       Uniter.Exp
       Uniter.Graph
+      Uniter.Process
       Uniter.Scratch
   other-modules:
       Paths_uniter

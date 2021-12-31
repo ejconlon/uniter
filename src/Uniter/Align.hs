@@ -1,23 +1,27 @@
 module Uniter.Align
-  ( Pair (..)
-  , UnalignableError (..)
+  ( UnalignableError (..)
   , Alignable (..)
   ) where
 
-import Control.DeepSeq (NFData)
 import Control.Exception (Exception)
-import Data.Hashable (Hashable)
 import Data.Typeable (Typeable)
-import GHC.Generics (Generic)
-
-data Pair a b = Pair !a !b
-  deriving stock (Eq, Show, Ord, Generic)
-  deriving anyclass (Hashable, NFData)
 
 data UnalignableError = UnalignableError
   deriving stock (Eq, Show, Typeable)
 
 instance Exception UnalignableError
 
-class Alignable e f | f -> e where
-  align :: f a -> f b -> Either e [Pair a b]
+class Traversable f => Alignable e f | f -> e where
+  align :: f a -> f b -> Either e (f (a, b))
+
+  alignAll :: [f a] -> Either (Maybe e) (f [a])
+  alignAll = fmap (fmap reverse) . go (Left Nothing) where
+    go acc = \case
+      [] -> acc
+      fa:fas ->
+        case acc of
+          Right gz ->
+            case align gz fa of
+              Left e -> Left (Just e)
+              Right pza -> go (Right (fmap (\(as, a) -> a:as) pza)) fas
+          _ -> go (Right (fmap pure fa)) fas

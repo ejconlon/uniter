@@ -20,6 +20,8 @@ module Uniter.Core
   , nextStreamEvent
   , streamUniter
   , Unitable (..)
+  , EventHandler (..)
+  , handleEvents
   ) where
 
 import Control.DeepSeq (NFData)
@@ -142,3 +144,20 @@ streamUniter u env bid = S.hoist (\x -> Identity (fst (runE x env bid))) (interp
 
 class Unitable e g t where
   unite :: t -> UniterM e g BoundId
+
+class Monad m => EventHandler e f m | m -> e f where
+  handleError :: UniterError e -> m a
+  handleAddNode :: Node f -> BoundId -> m ()
+  handleEmitEq :: BoundId -> BoundId -> BoundId -> m ()
+  handleFresh :: BoundId -> m ()
+
+handleEvents :: EventHandler e f m => EventStream e f r -> m r
+handleEvents es =
+  case nextStreamEvent es of
+    Left r -> pure r
+    Right ef ->
+      case ef of
+        EventError e -> handleError e
+        EventAddNode n i tl -> handleAddNode n i *> handleEvents tl
+        EventEmitEq i j y tl -> handleEmitEq i j y *> handleEvents tl
+        EventFresh i tl -> handleFresh i *> handleEvents tl
