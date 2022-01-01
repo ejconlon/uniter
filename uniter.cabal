@@ -27,9 +27,11 @@ library
       Uniter
       Uniter.Align
       Uniter.Core
+      Uniter.Env
       Uniter.Example
       Uniter.Exp
       Uniter.Graph
+      Uniter.Halt
       Uniter.Process
       Uniter.Scratch
   other-modules:

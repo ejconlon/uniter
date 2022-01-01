@@ -4,10 +4,10 @@ module Uniter.Exp where
 
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Text (Text)
-import Data.Void (Void)
 import Uniter.Align (Alignable (..), UnalignableError (..))
-import Uniter.Core (FreeName (..), Node (..), Unitable (..), uniterAddNode, uniterAssignFree, uniterEmitEq, uniterFresh,
-                    uniterIndexFree)
+import Uniter.Core (Node (..), Unitable (..), uniterAddNode, uniterEmitEq, uniterFresh)
+import Uniter.Env (FreeEnv, FreeEnvMissingError (..), FreeName (..), insertFreeEnvM, lookupFreeEnvM)
+import Uniter.Halt (halt)
 
 data Exp =
     ExpConst
@@ -32,13 +32,15 @@ instance Alignable UnalignableError TyF where
   align (TyPairF a b) (TyPairF c d) = Right (TyPairF (a, c) (b, d))
   align _ _ = Left UnalignableError
 
-instance Unitable Void TyF Exp where
+instance Unitable FreeEnv FreeEnvMissingError TyF Exp where
   unite = \case
     ExpConst -> uniterAddNode (Node TyConstF)
-    ExpUseBind n -> uniterIndexFree (FreeName n)
+    ExpUseBind n -> do
+      x <- lookupFreeEnvM (FreeName n)
+      maybe (halt (FreeEnvMissingError (FreeName n))) pure x
     ExpDefBind n x y -> do
       zx <- unite x
-      uniterAssignFree (FreeName n) zx (unite y)
+      insertFreeEnvM (FreeName n) zx (unite y)
     ExpTuple x y -> do
       zx <- unite x
       zy <- unite y

@@ -17,11 +17,11 @@ import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Overeasy.EquivFind (EquivFind, efAddInc, efFindRoot, efMember, efUnsafeMerge)
 import Uniter.Align (Alignable (..))
-import Uniter.Core (BoundId (..), EventHandler (..), Node (..), UniterError)
+import Uniter.Core (BoundId (..), EventHandler (..), Node (..))
+import Uniter.Halt (MonadHalt (halt))
 
 data ProcessError e =
-    ProcessErrorUniter !(UniterError e)
-  | ProcessErrorDuplicate !BoundId
+    ProcessErrorDuplicate !BoundId
   | ProcessErrorMissing !BoundId
   | ProcessErrorEmbed !e
   deriving stock (Eq, Show, Typeable)
@@ -44,7 +44,10 @@ deriving stock instance Show (f BoundId) => Show (ProcessState f)
 
 newtype ProcessM e f a = ProcessM
   { unProcessM :: StateT (ProcessState f) (Except (ProcessError e) ) a
-  } deriving newtype (Functor, Applicative, Monad, MonadError (ProcessError e), MonadState (ProcessState f))
+  } deriving newtype (Functor, Applicative, Monad, MonadState (ProcessState f))
+
+instance MonadHalt (ProcessError e) (ProcessM e f) where
+  halt = ProcessM . throwError
 
 runProcessM :: ProcessM e f a -> ProcessState f -> Either (ProcessError e) (a, ProcessState f)
 runProcessM p = runExcept . runStateT (unProcessM p)
@@ -52,13 +55,13 @@ runProcessM p = runExcept . runStateT (unProcessM p)
 guardNewP :: BoundId -> ProcessM e f ()
 guardNewP i = do
   isMem <- gets (efMember i . psEquiv)
-  when isMem (throwError (ProcessErrorDuplicate i))
+  when isMem (halt (ProcessErrorDuplicate i))
 
 lookupP :: BoundId -> ProcessM e f (BoundId, Defn f)
 lookupP i = do
   mayRoot <- gets (efFindRoot i . psEquiv)
   case mayRoot of
-    Nothing -> throwError (ProcessErrorMissing i)
+    Nothing -> halt (ProcessErrorMissing i)
     Just r -> gets (\st -> (r, psNodes st Map.! r))
 
 mergeP :: BoundId -> BoundId -> ProcessM e f ()
@@ -87,7 +90,7 @@ emitRecP = \case
             (_, DefnFresh) -> mergeP ri rj $> triples
             (DefnNode (Node ni), DefnNode (Node nj)) -> do
               case align ni nj of
-                Left e -> throwError (ProcessErrorEmbed e)
+                Left e -> halt (ProcessErrorEmbed e)
                 Right g -> do
                   (ny, addlTriples) <- runWriterT $ for g $ \(a, b) -> do
                     c <- lift freshP
@@ -107,8 +110,7 @@ defineP d i = do
         nodes' = Map.insert i d nodes
     in ProcessState uniq equiv' nodes'
 
-instance Alignable e f => EventHandler e f (ProcessM e f) where
-  handleError = throwError . ProcessErrorUniter
+instance Alignable e f => EventHandler (ProcessError e) f (ProcessM e f) where
   handleAddNode = defineP . DefnNode
   handleEmitEq i j y = emitRecP (Seq.singleton (Triple i j y))
   handleFresh = defineP DefnFresh

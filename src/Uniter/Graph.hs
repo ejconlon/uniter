@@ -26,8 +26,8 @@ import Data.Foldable (traverse_)
 import Data.Functor.Foldable (Base, Corecursive (..), Recursive (..))
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Uniter.Core (BoundId, EventHandler (..), EventStream, FreeEnv, Node (..), UniterError, UniterM, handleEvents,
-                    streamUniter)
+import Uniter.Core (BoundId, EventHandler (..), EventStream, Node (..), UniterM, handleEvents, streamUniter)
+import Uniter.Halt (MonadHalt (halt))
 
 data Elem f =
     ElemNode !(Node f)
@@ -84,33 +84,35 @@ graphInsertNode n = state $ \(GraphState uniq (BoundEnv m)) ->
   let m' = Map.insert uniq (ElemNode n) m
   in (uniq, GraphState (succ uniq) (BoundEnv m'))
 
-newtype AppM e f a = AppM { unAppM :: ReaderT FreeEnv (StateT (GraphState f) (Except (UniterError e))) a }
-  deriving newtype (Functor, Applicative, Monad, MonadReader FreeEnv, MonadState (GraphState f), MonadError (UniterError e))
+newtype AppM v e f a = AppM { unAppM :: ReaderT v (StateT (GraphState f) (Except e)) a }
+  deriving newtype (Functor, Applicative, Monad, MonadReader v, MonadState (GraphState f), MonadError e)
 
-runAppM :: AppM e f a -> FreeEnv -> GraphState f -> Either (UniterError e) (a, GraphState f)
+instance MonadHalt e (AppM v e f) where
+  halt = throwError
+
+runAppM :: AppM v e f a -> v -> GraphState f -> Either e (a, GraphState f)
 runAppM = undefined
 
-streamUniterA :: UniterM e f a -> AppM e f (EventStream e f (a, BoundId))
+streamUniterA :: UniterM v e f a -> AppM v e f (EventStream e f (a, BoundId))
 streamUniterA u = do
   env <- ask
   uniq <- gets gsUnique
   pure (streamUniter u env uniq)
 
-modifyBoundEnvA :: (Map BoundId (Elem f) -> Map BoundId (Elem f)) -> AppM e f ()
+modifyBoundEnvA :: (Map BoundId (Elem f) -> Map BoundId (Elem f)) -> AppM v e f ()
 modifyBoundEnvA f = modify' (\st -> st { gsBoundEnv = BoundEnv (f (unBoundEnv (gsBoundEnv st))) })
 
-instance EventHandler e f (AppM e f) where
-  handleError = throwError
+instance EventHandler e f (AppM v e f) where
   handleAddNode n i = modifyBoundEnvA (Map.insert i (ElemNode n))
   handleEmitEq i j y = modifyBoundEnvA (Map.insert y (ElemEq i j))
   handleFresh i = modifyBoundEnvA (Map.insert i ElemFresh)
 
-appUniter :: UniterM e f a -> AppM e f a
+appUniter :: UniterM v e f a -> AppM v e f a
 appUniter u = do
   es <- streamUniterA u
   (r, uniq) <- handleEvents es
   modify' (\st -> st { gsUnique = uniq })
   pure r
 
-appGraph :: GraphM f a -> AppM e f a
+appGraph :: GraphM f a -> AppM v e f a
 appGraph = state . runState

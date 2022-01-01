@@ -2,16 +2,8 @@
 
 module Uniter.Core
   ( BoundId (..)
-  , FreeName (..)
   , Node (..)
-  , FreeEnv (..)
-  , emptyFreeEnv
-  , UniterError (..)
   , UniterM
-  , uniterThrowError
-  , uniterLookupFree
-  , uniterIndexFree
-  , uniterAssignFree
   , uniterEmitEq
   , uniterAddNode
   , uniterFresh
@@ -25,88 +17,53 @@ module Uniter.Core
   ) where
 
 import Control.DeepSeq (NFData)
-import Control.Exception (Exception)
 import Control.Monad.Identity (Identity (..))
-import Control.Monad.Reader (MonadReader (..), ReaderT (..), asks)
+import Control.Monad.Reader (MonadReader (..), ReaderT (..))
 import Control.Monad.State.Strict (MonadState (..), State, runState)
 import Data.Hashable (Hashable)
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
-import Data.String (IsString)
-import Data.Text (Text)
-import Data.Typeable (Typeable)
 import Overeasy.Expressions.Free (Free, pattern FreeEmbed, pattern FreePure)
 import Streaming (Stream)
 import qualified Streaming as S
+import Uniter.Halt (MonadHalt (..))
 
 newtype BoundId = BoundId { unBoundId :: Int }
   deriving stock (Show)
   deriving newtype (Eq, Ord, Hashable, Enum, NFData)
 
-newtype FreeName = FreeName { unFreeName :: Text }
-  deriving stock (Show)
-  deriving newtype (Eq, Ord, Hashable, NFData, IsString)
-
 newtype Node f = Node { unNode :: f BoundId }
 deriving newtype instance Eq (f BoundId) => Eq (Node f)
 deriving stock instance Show (f BoundId) => Show (Node f)
 
-newtype FreeEnv = FreeEnv { unFreeEnv :: Map FreeName BoundId }
-  deriving stock (Show)
-  deriving newtype (Eq)
-
-emptyFreeEnv :: FreeEnv
-emptyFreeEnv = FreeEnv Map.empty
-
-data UniterError e =
-    UniterErrorFail !String
-  | UniterErrorMissingFree !FreeName
-  | UniterErrorEmbed !e
-  deriving stock (Eq, Show, Typeable)
-
-instance (Show e, Typeable e) => Exception (UniterError e)
-
-data UniterF e f m a =
-    UniterThrowError !(UniterError e)
-  | UniterLookupFree !FreeName !(Maybe BoundId -> a)
-  | UniterAssignFree !FreeName !BoundId (m a)
+data UniterF v e f m a =
+    UniterHalt !e
+  | UniterAsk !(v -> a)
+  | UniterLocal !(v -> v) (m a)
   | UniterEmitEq !BoundId !BoundId !(BoundId -> a)
   | UniterAddNode !(Node f) !(BoundId -> a)
   | UniterFresh !(BoundId -> a)
   deriving stock (Functor)
 
-newtype UniterM e f a = UniterM { unUniterM :: Free (UniterF e f (UniterM e f)) a }
+newtype UniterM v e f a = UniterM { unUniterM :: Free (UniterF v e f (UniterM v e f)) a }
   deriving newtype (Functor, Applicative, Monad)
 
-uniterThrowErrorInternal :: UniterError e -> UniterM e f a
-uniterThrowErrorInternal = UniterM . FreeEmbed . UniterThrowError
+instance MonadHalt e (UniterM v e f) where
+  halt = UniterM . FreeEmbed . UniterHalt
 
-uniterThrowError :: e -> UniterM e f a
-uniterThrowError = uniterThrowErrorInternal . UniterErrorEmbed
+instance MonadReader v (UniterM v e f) where
+  ask = UniterM (FreeEmbed (UniterAsk pure))
+  local f act = UniterM (FreeEmbed (UniterLocal f (fmap FreePure act)))
 
-uniterLookupFree :: FreeName -> UniterM e f (Maybe BoundId)
-uniterLookupFree x = UniterM (FreeEmbed (UniterLookupFree x pure))
-
-uniterIndexFree :: FreeName -> UniterM e f BoundId
-uniterIndexFree n = uniterLookupFree n >>= maybe (uniterThrowErrorInternal (UniterErrorMissingFree n)) pure
-
-uniterAssignFree :: FreeName -> BoundId -> UniterM e f a -> UniterM e f a
-uniterAssignFree x i act = UniterM (FreeEmbed (UniterAssignFree x i (fmap pure act)))
-
-uniterEmitEq :: BoundId -> BoundId -> UniterM e f BoundId
+uniterEmitEq :: BoundId -> BoundId -> UniterM v e f BoundId
 uniterEmitEq i j = UniterM (FreeEmbed (UniterEmitEq i j pure))
 
-uniterAddNode :: Node f -> UniterM e f BoundId
+uniterAddNode :: Node f -> UniterM v e f BoundId
 uniterAddNode n = UniterM (FreeEmbed (UniterAddNode n pure))
 
-uniterFresh :: UniterM e f BoundId
+uniterFresh :: UniterM v e f BoundId
 uniterFresh = UniterM (FreeEmbed (UniterFresh pure))
 
-instance MonadFail (UniterM e f) where
-  fail = uniterThrowErrorInternal . UniterErrorFail
-
 data EventF e f a =
-    EventError !(UniterError e)
+    EventHalt !e
   | EventAddNode !(Node f) !BoundId a
   | EventEmitEq !BoundId !BoundId !BoundId a
   | EventFresh !BoundId a
@@ -121,35 +78,34 @@ type EventStream e f = EventStreamM e f Identity
 nextStreamEvent :: EventStream e f r -> Either r (EventF e f (EventStream e f r))
 nextStreamEvent = runIdentity . S.inspect
 
-newtype E a = E { unE :: ReaderT FreeEnv (State BoundId) a }
-  deriving newtype (Functor, Applicative, Monad, MonadReader FreeEnv, MonadState BoundId)
+newtype E v a = E { unE :: ReaderT v (State BoundId) a }
+  deriving newtype (Functor, Applicative, Monad, MonadReader v, MonadState BoundId)
 
-runE :: E a -> FreeEnv -> BoundId -> (a, BoundId)
+runE :: E v a -> v -> BoundId -> (a, BoundId)
 runE e = runState . runReaderT (unE e)
 
-interpESM :: UniterM e f r -> EventStreamM e f E r
-interpESM = subInterpESM . unUniterM
+interpESM :: v -> UniterM v e f r -> EventStreamM e f (E v) r
+interpESM v = subInterpESM v . unUniterM
 
-subInterpESM :: Free (UniterF e f (UniterM e f)) a -> EventStreamM e f E a
-subInterpESM = \case
+subInterpESM :: v -> Free (UniterF v e f (UniterM v e f)) a -> EventStreamM e f (E v) a
+subInterpESM v = \case
   FreePure a -> pure a
   FreeEmbed u ->
     case u of
-      UniterThrowError e -> S.yields (EventError e)
-      UniterLookupFree i k -> asks (Map.lookup i . unFreeEnv) >>= subInterpESM . k
-      UniterAssignFree x i act -> local (\(FreeEnv m) -> FreeEnv (Map.insert x i m)) (interpESM act >>= subInterpESM)
-      UniterEmitEq i j k -> state (\b -> (b, succ b)) >>= \y -> S.wrap (EventEmitEq i j y (subInterpESM (k y)))
-      UniterAddNode n k -> state (\b -> (b, succ b)) >>= \i -> S.wrap (EventAddNode n i (subInterpESM (k i)))
-      UniterFresh k -> state (\b -> (b, succ b)) >>= \i -> S.wrap (EventFresh i (subInterpESM (k i)))
+      UniterHalt e -> S.yields (EventHalt e)
+      UniterAsk k -> subInterpESM v (k v)
+      UniterLocal f act -> interpESM (f v) act >>= subInterpESM v
+      UniterEmitEq i j k -> state (\b -> (b, succ b)) >>= \y -> S.wrap (EventEmitEq i j y (subInterpESM v (k y)))
+      UniterAddNode n k -> state (\b -> (b, succ b)) >>= \i -> S.wrap (EventAddNode n i (subInterpESM v (k i)))
+      UniterFresh k -> state (\b -> (b, succ b)) >>= \i -> S.wrap (EventFresh i (subInterpESM v (k i)))
 
-streamUniter :: UniterM e f r -> FreeEnv -> BoundId -> EventStream e f (r, BoundId)
-streamUniter u env bid = S.hoist (\x -> Identity (fst (runE x env bid))) (interpESM u >>= \r -> get >>= \bid' -> pure (r, bid'))
+streamUniter :: UniterM v e f r -> v -> BoundId -> EventStream e f (r, BoundId)
+streamUniter u v bid = S.hoist (\x -> Identity (fst (runE x v bid))) (interpESM v u >>= \r -> get >>= \bid' -> pure (r, bid'))
 
-class Unitable e g t where
-  unite :: t -> UniterM e g BoundId
+class Unitable v e g t where
+  unite :: t -> UniterM v e g BoundId
 
-class Monad m => EventHandler e f m | m -> e f where
-  handleError :: UniterError e -> m a
+class MonadHalt e m => EventHandler e f m | m -> e f where
   handleAddNode :: Node f -> BoundId -> m ()
   handleEmitEq :: BoundId -> BoundId -> BoundId -> m ()
   handleFresh :: BoundId -> m ()
@@ -160,7 +116,7 @@ handleEvents es =
     Left r -> pure r
     Right ef ->
       case ef of
-        EventError e -> handleError e
+        EventHalt e -> halt e
         EventAddNode n i tl -> handleAddNode n i *> handleEvents tl
         EventEmitEq i j y tl -> handleEmitEq i j y *> handleEvents tl
         EventFresh i tl -> handleFresh i *> handleEvents tl
