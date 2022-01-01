@@ -32,28 +32,28 @@ instance Alignable UnalignableError TyF where
   align (TyPairF a b) (TyPairF c d) = Right (TyPairF (a, c) (b, d))
   align _ _ = Left UnalignableError
 
-instance Unitable FreeEnv FreeEnvMissingError TyF Exp where
+instance Unitable FreeEnv FreeEnvMissingError TyF ExpF where
   unite = \case
-    ExpConst -> uniterAddNode (Node TyConstF)
-    ExpUseBind n -> do
-      x <- lookupFreeEnvM (FreeName n)
-      maybe (halt (FreeEnvMissingError (FreeName n))) pure x
-    ExpDefBind n x y -> do
-      zx <- unite x
-      insertFreeEnvM (FreeName n) zx (unite y)
-    ExpTuple x y -> do
-      zx <- unite x
-      zy <- unite y
-      uniterAddNode (Node (TyPairF zx zy))
-    ExpFirst x -> do
-      zx <- unite x
+    ExpConstF -> uniterAddNode (Node TyConstF)
+    ExpUseBindF n -> do
+      b <- lookupFreeEnvM (FreeName n)
+      maybe (halt (FreeEnvMissingError (FreeName n))) pure b
+    ExpDefBindF n mx my -> do
+      x <- mx
+      insertFreeEnvM (FreeName n) x my
+    ExpTupleF mx my -> do
+      x <- mx
+      y <- my
+      uniterAddNode (Node (TyPairF x y))
+    ExpFirstF mx -> do
+      x <- mx
       v <- uniterFresh
       w <- uniterFresh
-      zy <- uniterAddNode (Node (TyPairF v w))
-      uniterEmitEq zx zy
-    ExpSecond x -> do
-      zx <- unite x
+      y <- uniterAddNode (Node (TyPairF v w))
+      uniterEmitEq x y
+    ExpSecondF mx -> do
+      x <- mx
       v <- uniterFresh
       w <- uniterFresh
-      zy <- uniterAddNode (Node (TyPairF v w))
-      uniterEmitEq zx zy
+      y <- uniterAddNode (Node (TyPairF v w))
+      uniterEmitEq x y

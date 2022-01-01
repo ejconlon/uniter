@@ -12,6 +12,7 @@ module Uniter.Core
   , nextStreamEvent
   , streamUniter
   , Unitable (..)
+  , uniteTerm
   , EventHandler (..)
   , handleEvents
   ) where
@@ -20,6 +21,7 @@ import Control.DeepSeq (NFData)
 import Control.Monad.Identity (Identity (..))
 import Control.Monad.Reader (MonadReader (..), ReaderT (..))
 import Control.Monad.State.Strict (MonadState (..), State, runState)
+import Data.Functor.Foldable (Base, Recursive (cata))
 import Data.Hashable (Hashable)
 import Overeasy.Expressions.Free (Free, pattern FreeEmbed, pattern FreePure)
 import Streaming (Stream)
@@ -102,8 +104,11 @@ subInterpESM v = \case
 streamUniter :: UniterM v e f r -> v -> BoundId -> EventStream e f (r, BoundId)
 streamUniter u v bid = S.hoist (\x -> Identity (fst (runE x v bid))) (interpESM v u >>= \r -> get >>= \bid' -> pure (r, bid'))
 
-class Unitable v e g t where
-  unite :: t -> UniterM v e g BoundId
+class Unitable v e g f where
+  unite :: f (UniterM v e g BoundId) -> UniterM v e g BoundId
+
+uniteTerm :: (Recursive t, Base t ~ f, Unitable v e g f) => t -> UniterM v e g BoundId
+uniteTerm = cata unite
 
 class MonadHalt e m => EventHandler e f m | m -> e f where
   handleAddNode :: Node f -> BoundId -> m ()

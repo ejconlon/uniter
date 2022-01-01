@@ -19,9 +19,9 @@ module Uniter.Graph
   ) where
 
 import Control.Monad ((>=>))
-import Control.Monad.Except (Except, MonadError (..))
-import Control.Monad.Reader (MonadReader (..), ReaderT)
-import Control.Monad.State.Strict (MonadState (..), State, StateT, gets, modify', runState)
+import Control.Monad.Except (Except, MonadError (..), runExcept)
+import Control.Monad.Reader (MonadReader (..), ReaderT (runReaderT))
+import Control.Monad.State.Strict (MonadState (..), State, StateT (runStateT), gets, modify', runState)
 import Data.Foldable (traverse_)
 import Data.Functor.Foldable (Base, Corecursive (..), Recursive (..))
 import Data.Map.Strict (Map)
@@ -91,7 +91,7 @@ instance MonadHalt e (AppM v e f) where
   halt = throwError
 
 runAppM :: AppM v e f a -> v -> GraphState f -> Either e (a, GraphState f)
-runAppM = undefined
+runAppM a v = runExcept . runStateT (runReaderT (unAppM a) v)
 
 streamUniterA :: UniterM v e f a -> AppM v e f (EventStream e f (a, BoundId))
 streamUniterA u = do

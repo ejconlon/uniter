@@ -15,7 +15,9 @@ import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
-import Overeasy.EquivFind (EquivFind, efAddInc, efFindRoot, efMember, efUnsafeMerge)
+import Overeasy.EquivFind (EquivFind, efAddInc, efFindRoot, efMember, efMergeInc)
+import Overeasy.IntLike.Set (IntLikeSet)
+import qualified Overeasy.IntLike.Set as ILS
 import Uniter.Align (Alignable (..))
 import Uniter.Core (BoundId (..), EventHandler (..), Node (..))
 import Uniter.Halt (MonadHalt (halt))
@@ -64,10 +66,10 @@ lookupP i = do
     Nothing -> halt (ProcessErrorMissing i)
     Just r -> gets (\st -> (r, psNodes st Map.! r))
 
-mergeP :: BoundId -> BoundId -> ProcessM e f ()
+mergeP :: IntLikeSet BoundId -> ProcessM e f ()
 mergeP = undefined
 
-mergeAsP :: BoundId -> BoundId -> Defn f -> ProcessM e f ()
+mergeAsP :: IntLikeSet BoundId -> Defn f -> ProcessM e f ()
 mergeAsP = undefined
 
 freshP :: ProcessM e f BoundId
@@ -83,23 +85,22 @@ emitRecP = \case
       guardNewP y
       (ri, di) <- lookupP i
       (rj, dj) <- lookupP j
+      let rootTrip = ILS.fromList [ri, rj, y]
       newTriples <-
-        if ri /= rj
-          then case (di, dj) of
-            (DefnFresh, _) -> mergeP ri rj $> triples
-            (_, DefnFresh) -> mergeP ri rj $> triples
-            (DefnNode (Node ni), DefnNode (Node nj)) -> do
-              case align ni nj of
-                Left e -> halt (ProcessErrorEmbed e)
-                Right g -> do
-                  (ny, addlTriples) <- runWriterT $ for g $ \(a, b) -> do
-                    c <- lift freshP
-                    let triple = Triple a b c
-                    tell (Seq.singleton triple)
-                    pure c
-                  mergeAsP ri rj (DefnNode (Node ny))
-                  pure (addlTriples <> triples)
-          else pure triples
+        case (di, dj) of
+          (DefnFresh, _) -> mergeP rootTrip $> triples
+          (_, DefnFresh) -> mergeP rootTrip $> triples
+          (DefnNode (Node ni), DefnNode (Node nj)) -> do
+            case align ni nj of
+              Left e -> halt (ProcessErrorEmbed e)
+              Right g -> do
+                (ny, addlTriples) <- runWriterT $ for g $ \(a, b) -> do
+                  c <- lift freshP
+                  let triple = Triple a b c
+                  tell (Seq.singleton triple)
+                  pure c
+                mergeAsP rootTrip (DefnNode (Node ny))
+                pure (addlTriples <> triples)
       emitRecP newTriples
 
 defineP :: Defn f -> BoundId -> ProcessM e f ()
