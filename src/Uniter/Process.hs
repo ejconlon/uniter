@@ -15,7 +15,7 @@ import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
-import Overeasy.EquivFind (EquivFind, efAddInc, efFindRoot, efMember, efMergeInc)
+import Overeasy.EquivFind (EquivFind, efAddInc, efFindRoot, efMember)
 import Overeasy.IntLike.Set (IntLikeSet)
 import qualified Overeasy.IntLike.Set as ILS
 import Uniter.Align (Alignable (..))

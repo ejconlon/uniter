@@ -82,5 +82,7 @@ tests:
     - -with-rtsopts=-N
     dependencies:
     - uniter
+    - hedgehog
     - tasty
     - tasty-hunit
+    - tasty-hedgehog

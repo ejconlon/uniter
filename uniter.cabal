@@ -84,6 +84,9 @@ test-suite uniter-test
   type: exitcode-stdio-1.0
   main-is: Main.hs
   other-modules:
+      Test.Uniter.Assertions
+      Test.Uniter.Main
+      Test.Uniter.State
       Paths_uniter
   hs-source-dirs:
       test
@@ -120,11 +123,13 @@ test-suite uniter-test
     , containers
     , deepseq
     , hashable
+    , hedgehog
     , mtl
     , overeasy
     , recursion-schemes
     , streaming
     , tasty
+    , tasty-hedgehog
     , tasty-hunit
     , text
     , transformers
