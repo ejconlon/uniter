@@ -15,6 +15,8 @@ module Uniter.UnionMap
   , addUnionMap
   , UnionMapAddVal (..)
   , addUnionMapS
+  , UnionMapTraceRes (..)
+  , traceUnionMap
   , UnionMapLookupRes (..)
   , lookupUnionMap
   , UnionMapLookupVal (..)
@@ -132,20 +134,19 @@ traceUnionMap k (UnionMap m) = go [] k where
       Nothing -> UnionMapTraceResMissing j
       Just link -> case link of
         UnionEntryLink kx -> go (j:acc) kx
-        UnionEntryValue v -> UnionMapTraceResFound k v acc
+        UnionEntryValue v -> UnionMapTraceResFound j v (safeTail acc)
 
 data UnionMapLookupRes k v =
     UnionMapLookupResMissing !k
-  | UnionMapLookupResOk !k !v !(Maybe (UnionMap k v))
+  | UnionMapLookupResFound !k !v !(Maybe (UnionMap k v))
   deriving stock (Eq, Show)
 
 lookupUnionMap :: Coercible k Int => k -> UnionMap k v -> UnionMapLookupRes k v
 lookupUnionMap k u = case traceUnionMap k u of
   UnionMapTraceResMissing kx -> UnionMapLookupResMissing kx
   UnionMapTraceResFound kr vr acc ->
-    let tlAcc = safeTail acc
-        mu = if null tlAcc then Nothing else Just (foldl' (\(UnionMap n) kx -> UnionMap (ILM.insert kx (UnionEntryLink kr) n)) u tlAcc)
-    in UnionMapLookupResOk kr vr mu
+    let mu = if null acc then Nothing else Just (foldl' (\(UnionMap n) kx -> UnionMap (ILM.insert kx (UnionEntryLink kr) n)) u acc)
+    in UnionMapLookupResFound kr vr mu
 
 data UnionMapLookupVal k v =
     UnionMapLookupValMissing !k
@@ -156,7 +157,7 @@ lookupUnionMapS :: Coercible k Int => k -> State (UnionMap k v) (UnionMapLookupV
 lookupUnionMapS k = state $ \u ->
   case lookupUnionMap k u of
     UnionMapLookupResMissing x -> (UnionMapLookupValMissing x, u)
-    UnionMapLookupResOk x y mw -> (UnionMapLookupValOk x y, fromMaybe u mw)
+    UnionMapLookupResFound x y mw -> (UnionMapLookupValOk x y, fromMaybe u mw)
 
 equivUnionMap :: Coercible k Int => UnionMap k v -> ((IntLikeMap k (IntLikeSet k), IntLikeMap k k), UnionMap k v)
 equivUnionMap u = foldl' go ((ILM.empty, ILM.empty), u) (toListUnionMap u) where
@@ -168,7 +169,7 @@ equivUnionMap u = foldl' go ((ILM.empty, ILM.empty), u) (toListUnionMap u) where
       UnionEntryLink _ ->
         case lookupUnionMap k w of
           UnionMapLookupResMissing _ -> error "impossible"
-          UnionMapLookupResOk r _ mw ->
+          UnionMapLookupResFound r _ mw ->
             let fwd' = ILM.alter (Just . maybe (ILS.singleton k) (ILS.insert k)) r fwd
                 bwd' = ILM.insert k r bwd
                 w' = fromMaybe w mw
@@ -176,7 +177,6 @@ equivUnionMap u = foldl' go ((ILM.empty, ILM.empty), u) (toListUnionMap u) where
 
 equivUnionMapS :: Coercible k Int => State (UnionMap k v) (IntLikeMap k (IntLikeSet k), IntLikeMap k k)
 equivUnionMapS = state equivUnionMap
-
 
 data UnionMapUpdateRes e k v =
     UnionMapUpdateResMissing !k
@@ -192,7 +192,7 @@ updateUnionMap g k v u@(UnionMap m) = go1 where
       if k == kx
         then UnionMapUpdateResAdded (UnionMap (ILM.insert k (UnionEntryValue v) m))
         else UnionMapUpdateResMissing kx
-    UnionMapLookupResOk kr vr mu -> go2 kr vr (fromMaybe u mu)
+    UnionMapLookupResFound kr vr mu -> go2 kr vr (fromMaybe u mu)
   go2 kr vr (UnionMap mr) =
     case g vr v of
       Left e -> UnionMapUpdateResEmbed e
@@ -226,9 +226,7 @@ mergeOneUnionMap g k j u@(UnionMap m) = goLookupK where
       if k == kx
         then goAssign
         else UnionMapMergeResMissing kx
-    UnionMapTraceResFound kr kv kacc ->
-      -- tail to drop last link we don't need to update
-      goLookupJ kr kv (safeTail kacc)
+    UnionMapTraceResFound kr kv kacc -> goLookupJ kr kv kacc
   goAssign = case traceUnionMap j u of
     UnionMapTraceResMissing jx -> UnionMapMergeResMissing jx
     UnionMapTraceResFound jr jv jacc ->
