@@ -1,5 +1,6 @@
 module Uniter.UnionMap
-  ( UnionMergeOne
+  ( UnionEntry (..)
+  , UnionMergeOne
   , UnionMergeMany
   , foldUnionMergeMany
   , semigroupUnionMergeOne
@@ -8,16 +9,25 @@ module Uniter.UnionMap
   , emptyUnionMap
   , sizeUnionMap
   , memberUnionMap
+  , toListUnionMap
+  , valuesUnionMap
+  , UnionMapAddRes (..)
   , addUnionMap
+  , UnionMapAddVal (..)
   , addUnionMapS
   , UnionMapLookupRes (..)
   , lookupUnionMap
+  , UnionMapLookupVal (..)
   , lookupUnionMapS
+  , equivUnionMap
+  , equivUnionMapS
   , UnionMapUpdateRes (..)
   , updateUnionMap
+  , UnionMapUpdateVal (..)
   , updateUnionMapS
   , UnionMapMergeRes (..)
   , mergeOneUnionMap
+  , UnionMapMergeVal (..)
   , mergeOneUnionMapS
   -- , mergeManyUnionMap
   ) where
@@ -32,6 +42,8 @@ import Data.Semigroup (sconcat)
 import GHC.Generics (Generic)
 import Overeasy.IntLike.Map (IntLikeMap)
 import qualified Overeasy.IntLike.Map as ILM
+import Overeasy.IntLike.Set (IntLikeSet)
+import qualified Overeasy.IntLike.Set as ILS
 
 safeTail :: [a] -> [a]
 safeTail xs =
@@ -76,17 +88,37 @@ sizeUnionMap = ILM.size . unUnionMap
 memberUnionMap :: Coercible k Int => k -> UnionMap k v -> Bool
 memberUnionMap k = ILM.member k . unUnionMap
 
-addUnionMap :: Coercible k Int => k -> v -> UnionMap k v -> Maybe (UnionMap k v)
+toListUnionMap :: Coercible k Int => UnionMap k v -> [(k, UnionEntry k v)]
+toListUnionMap = ILM.toList . unUnionMap
+
+valuesUnionMap :: Coercible k Int => UnionMap k v -> IntLikeMap k v
+valuesUnionMap = foldl' go ILM.empty . toListUnionMap where
+  go m (k, ue) =
+    case ue of
+      UnionEntryValue v -> ILM.insert k v m
+      _ -> m
+
+data UnionMapAddRes k v =
+    UnionMapAddResAdded !(UnionMap k v)
+  | UnionMapAddResExists
+  deriving stock (Eq, Show)
+
+addUnionMap :: Coercible k Int => k -> v -> UnionMap k v -> UnionMapAddRes k v
 addUnionMap k v (UnionMap m) =
   case ILM.lookup k m of
-    Nothing -> Just (UnionMap (ILM.insert k (UnionEntryValue v) m))
-    Just _ -> Nothing
+    Nothing -> UnionMapAddResAdded (UnionMap (ILM.insert k (UnionEntryValue v) m))
+    Just _ -> UnionMapAddResExists
 
-addUnionMapS :: Coercible k Int => k -> v -> State (UnionMap k v) (Maybe (UnionMap k v))
+data UnionMapAddVal =
+    UnionMapAddValAdded
+  | UnionMapAddValExists
+  deriving stock (Eq, Show)
+
+addUnionMapS :: Coercible k Int => k -> v -> State (UnionMap k v) UnionMapAddVal
 addUnionMapS k v = state $ \u ->
-  let r = addUnionMap k v u
-      y = case r of { Just w -> w; _ -> u }
-  in (r, y)
+  case addUnionMap k v u of
+    UnionMapAddResAdded w -> (UnionMapAddValAdded, w)
+    UnionMapAddResExists -> (UnionMapAddValExists, u)
 
 data UnionMapTraceRes k v =
     UnionMapTraceResMissing !k
@@ -115,11 +147,36 @@ lookupUnionMap k u = case traceUnionMap k u of
         mu = if null tlAcc then Nothing else Just (foldl' (\(UnionMap n) kx -> UnionMap (ILM.insert kx (UnionEntryLink kr) n)) u tlAcc)
     in UnionMapLookupResOk kr vr mu
 
-lookupUnionMapS :: Coercible k Int => k -> State (UnionMap k v) (UnionMapLookupRes k v)
+data UnionMapLookupVal k v =
+    UnionMapLookupValMissing !k
+  | UnionMapLookupValOk !k !v
+  deriving stock (Eq, Show)
+
+lookupUnionMapS :: Coercible k Int => k -> State (UnionMap k v) (UnionMapLookupVal k v)
 lookupUnionMapS k = state $ \u ->
-  let r = lookupUnionMap k u
-      y = case r of { UnionMapLookupResOk _ _ (Just w) -> w; _ -> u }
-  in (r, y)
+  case lookupUnionMap k u of
+    UnionMapLookupResMissing x -> (UnionMapLookupValMissing x, u)
+    UnionMapLookupResOk x y mw -> (UnionMapLookupValOk x y, fromMaybe u mw)
+
+equivUnionMap :: Coercible k Int => UnionMap k v -> ((IntLikeMap k (IntLikeSet k), IntLikeMap k k), UnionMap k v)
+equivUnionMap u = foldl' go ((ILM.empty, ILM.empty), u) (toListUnionMap u) where
+  go ((fwd, bwd), w) (k, ue) =
+    case ue of
+      UnionEntryValue _ ->
+        let fwd' = ILM.alter (Just . fromMaybe ILS.empty) k fwd
+        in ((fwd', bwd), w)
+      UnionEntryLink _ ->
+        case lookupUnionMap k w of
+          UnionMapLookupResMissing _ -> error "impossible"
+          UnionMapLookupResOk r _ mw ->
+            let fwd' = ILM.alter (Just . maybe (ILS.singleton k) (ILS.insert k)) r fwd
+                bwd' = ILM.insert k r bwd
+                w' = fromMaybe w mw
+            in ((fwd', bwd'), w')
+
+equivUnionMapS :: Coercible k Int => State (UnionMap k v) (IntLikeMap k (IntLikeSet k), IntLikeMap k k)
+equivUnionMapS = state equivUnionMap
+
 
 data UnionMapUpdateRes e k v =
     UnionMapUpdateResMissing !k
@@ -141,11 +198,20 @@ updateUnionMap g k v u@(UnionMap m) = go1 where
       Left e -> UnionMapUpdateResEmbed e
       Right vg -> UnionMapUpdateResUpdated kr vg (UnionMap (ILM.insert kr (UnionEntryValue vg) mr))
 
-updateUnionMapS :: (Coercible k Int, Eq k) => UnionMergeOne e v -> k -> v -> State (UnionMap k v) (UnionMapUpdateRes e k v)
+data UnionMapUpdateVal e k v =
+    UnionMapUpdateValMissing !k
+  | UnionMapUpdateValEmbed !e
+  | UnionMapUpdateValAdded
+  | UnionMapUpdateValUpdated !k !v
+  deriving stock (Eq, Show)
+
+updateUnionMapS :: (Coercible k Int, Eq k) => UnionMergeOne e v -> k -> v -> State (UnionMap k v) (UnionMapUpdateVal e k v)
 updateUnionMapS g k v = state $ \u ->
-  let r = updateUnionMap g k v u
-      y = case r of { UnionMapUpdateResAdded w -> w; UnionMapUpdateResUpdated _ _ w -> w; _ -> u }
-  in (r, y)
+  case updateUnionMap g k v u of
+  UnionMapUpdateResMissing x -> (UnionMapUpdateValMissing x, u)
+  UnionMapUpdateResEmbed e -> (UnionMapUpdateValEmbed e, u)
+  UnionMapUpdateResAdded w -> (UnionMapUpdateValAdded, w)
+  UnionMapUpdateResUpdated x y w -> (UnionMapUpdateValUpdated x y, w)
 
 data UnionMapMergeRes e k v =
     UnionMapMergeResMissing !k
@@ -183,11 +249,18 @@ mergeOneUnionMap g k j u@(UnionMap m) = goLookupK where
     let fu = foldl' (\(UnionMap n) kx -> UnionMap (ILM.insert kx (UnionEntryLink kr) n)) gu acc
     in UnionMapMergeResOk kr gv fu
 
-mergeOneUnionMapS :: (Coercible k Int, Eq k) => UnionMergeOne e v -> k -> k -> State (UnionMap k v) (UnionMapMergeRes e k v)
+data UnionMapMergeVal e k v =
+    UnionMapMergeValMissing !k
+  | UnionMapMergeValEmbed !e
+  | UnionMapMergeValOk !k !v
+  deriving stock (Eq, Show)
+
+mergeOneUnionMapS :: (Coercible k Int, Eq k) => UnionMergeOne e v -> k -> k -> State (UnionMap k v) (UnionMapMergeVal e k v)
 mergeOneUnionMapS g k j = state $ \u ->
-  let r = mergeOneUnionMap g k j u
-      y = case r of { UnionMapMergeResOk _ _ w -> w; _ -> u }
-  in (r, y)
+  case mergeOneUnionMap g k j u of
+  UnionMapMergeResMissing x -> (UnionMapMergeValMissing x, u)
+  UnionMapMergeResEmbed e -> (UnionMapMergeValEmbed e, u)
+  UnionMapMergeResOk x y w -> (UnionMapMergeValOk x y, w)
 
 -- mergeManyUnionMap :: (Coercible k Int, Eq k) => UnionMergeMany e v -> k -> [k] -> UnionMap k v -> UnionMapMergeRes e k v
 -- mergeManyUnionMap = undefined

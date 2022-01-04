@@ -2,13 +2,14 @@ module Test.Uniter.State
   ( StateT (..)
   , State
   , MonadState (..)
+  , gets
   , runS
   , testS
   , applyS
   , applyTestS
   ) where
 
-import Control.Monad.State.Strict (MonadState (..), State, StateT (..), evalStateT, runState)
+import Control.Monad.State.Strict (MonadState (..), State, StateT (..), evalStateT, gets, runState)
 import Control.Monad.Trans (lift)
 
 runS :: Monad m => s -> StateT s m () -> m ()

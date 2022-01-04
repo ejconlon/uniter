@@ -15,19 +15,21 @@ description: Please see the README on GitHub at <https://github.com/githubuser/u
 
 dependencies:
 - base >= 4.12 && < 5
+# TODO split out int-like
 - overeasy
-# TODO trim deps
-- deepseq
-# - free
-- streaming
-- recursion-schemes
 - containers
-# - unordered-containers
+- deepseq
 - hashable
-# - logict
+- mtl
+- recursion-schemes
+- streaming
 - text
 - transformers
-- mtl
+# TODO remove test deps
+- hedgehog
+- tasty
+- tasty-hunit
+- tasty-hedgehog
 
 default-extensions:
 - BangPatterns

@@ -1,13 +1,18 @@
 module Test.Uniter.Main (main) where
 
+import Data.Bifunctor (bimap, first)
 import Data.Char (chr, ord)
 import Data.Semigroup (Max)
 import Data.Void (Void)
+import Overeasy.IntLike.Map (IntLikeMap)
+import qualified Overeasy.IntLike.Map as ILM
+import Overeasy.IntLike.Set (IntLikeSet)
+import qualified Overeasy.IntLike.Set as ILS
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Uniter.Assertions (testUnit, (===))
-import Test.Uniter.State (applyS, applyTestS, runS, testS)
-import Uniter.UnionMap (UnionMap, UnionMapLookupRes (..), UnionMergeOne, addUnionMapS, emptyUnionMap, lookupUnionMapS,
-                        mergeOneUnionMap, semigroupUnionMergeOne, sizeUnionMap)
+import Test.Uniter.State (applyS, applyTestS, gets, runS, testS)
+import Uniter.UnionMap (UnionMap, UnionMapLookupVal (..), UnionMergeOne, addUnionMapS, emptyUnionMap, equivUnionMapS,
+                        lookupUnionMapS, semigroupUnionMergeOne, sizeUnionMap, valuesUnionMap)
 
 newtype V = V { unV :: Int }
   deriving newtype (Eq)
@@ -18,6 +23,18 @@ toV = V . ord
 
 fromV :: V -> Char
 fromV = chr . unV
+
+setV :: String -> IntLikeSet V
+setV = ILS.fromList . fmap toV
+
+mapV :: [(Char, a)] -> IntLikeMap V a
+mapV = ILM.fromList . fmap (first toV)
+
+mapVV :: [(Char, Char)] -> IntLikeMap V V
+mapVV = ILM.fromList . fmap (bimap toV toV)
+
+multiMapVV :: [(Char, String)] -> IntLikeMap V (IntLikeSet V)
+multiMapVV = ILM.fromList . fmap (bimap toV setV)
 
 type UMV = UnionMap V (Max Int)
 
@@ -35,16 +52,20 @@ testUmSimple = testUnit "UM simple" $ runS emptyUMV $ do
   testS $ \um -> do
     sizeUnionMap um === 1
   applyTestS (lookupUnionMapS (toV 'a')) $ \res _ ->
-    case res of
-      UnionMapLookupResOk k v mu -> do
-        k === toV 'a'
-        v === 1
-        mu === Nothing
-      _ -> fail "bad lookup"
+    res === UnionMapLookupValOk (toV 'a') 1
   _ <- applyS (addUnionMapS (toV 'b') 2)
   _ <- applyS (addUnionMapS (toV 'c') 3)
   testS $ \um -> do
     sizeUnionMap um === 3
+  applyTestS (lookupUnionMapS (toV 'b')) $ \res _ ->
+    res === UnionMapLookupValOk (toV 'b') 2
+  applyTestS (lookupUnionMapS (toV 'c')) $ \res _ ->
+    res === UnionMapLookupValOk (toV 'c') 3
+  applyTestS (gets valuesUnionMap) $ \res _ ->
+    res === mapV [('a', 1), ('b', 2), ('c', 3)]
+  applyTestS equivUnionMapS $ \(fwd, bwd) _ -> do
+    fwd === multiMapVV [('a', ""), ('b', ""), ('c', "")]
+    bwd === mapVV []
   -- applyTestS (mergeOneUnionMap mergeOneUMV (toV 'a') (toV 'c')) $ \res ef -> do
   --   res === Just (toV 'a', setV "c")
   --   efRootsSize ef === 2
