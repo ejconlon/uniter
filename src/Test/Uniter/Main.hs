@@ -13,7 +13,7 @@ import Test.Uniter.Assertions (testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
 import Uniter.UnionMap (Changed (..), UnionMap, UnionMapAddVal (..), UnionMapLookupVal (..), UnionMapMergeVal (..),
                         UnionMapTraceRes (..), UnionMergeOne, addUnionMapM, emptyUnionMap, equivUnionMapM,
-                        lookupUnionMapM, mergeOneUnionMapM, semigroupUnionMergeOne, sizeUnionMap, traceUnionMap,
+                        lookupUnionMapM, mergeOneUnionMapM, concatUnionMergeOne, sizeUnionMap, traceUnionMap,
                         valuesUnionMap)
 
 newtype V = V { unV :: Int }
@@ -44,7 +44,7 @@ emptyUMV :: UMV
 emptyUMV = emptyUnionMap
 
 mergeOneUMV :: UnionMergeOne Void (Max Int) ()
-mergeOneUMV = semigroupUnionMergeOne
+mergeOneUMV = concatUnionMergeOne
 
 testUmSimple :: TestTree
 testUmSimple = testUnit "UM simple" $ runS emptyUMV $ do

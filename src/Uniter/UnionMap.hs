@@ -7,8 +7,8 @@ module Uniter.UnionMap
   , adaptUnionMergeOne
   , foldUnionMergeOne
   , foldUnionMergeMany
-  , semigroupUnionMergeOne
-  , semigroupUnionMergeMany
+  , concatUnionMergeOne
+  , concatUnionMergeMany
   , UnionMap
   , UnionMapLens
   , emptyUnionMap
@@ -49,11 +49,8 @@ module Uniter.UnionMap
 import Control.DeepSeq (NFData)
 import Control.Monad.State.Strict (MonadState)
 import Data.Coerce (Coercible)
-import Data.Foldable (foldl')
-import Data.List.NonEmpty (NonEmpty (..))
-import qualified Data.List.NonEmpty as NE
+import Data.Foldable (foldl', fold, toList)
 import Data.Maybe (fromMaybe)
-import Data.Semigroup (sconcat)
 import GHC.Generics (Generic)
 import Lens.Micro (Lens')
 import Overeasy.IntLike.Map (IntLikeMap)
@@ -85,10 +82,10 @@ data UnionEntry k v =
   deriving anyclass (NFData)
 
 type UnionMergeOne e v r = Maybe v -> v -> Either e (r, v)
-type UnionMergeMany e v r = Maybe v -> NonEmpty v -> Either e (r, v)
+type UnionMergeMany f e v r = Maybe v -> f v -> Either e (r, v)
 
-adaptUnionMergeOne :: UnionMergeMany e v r -> UnionMergeOne e v r
-adaptUnionMergeOne g mv v = g mv (v :| [])
+adaptUnionMergeOne :: (v -> f v) -> UnionMergeMany f e v r -> UnionMergeOne e v r
+adaptUnionMergeOne h g mv = g mv . h
 
 foldUnionMergeOne :: Monoid r => (v -> v -> Either e (r, v)) -> UnionMergeOne e v r
 foldUnionMergeOne g mv v =
@@ -96,12 +93,13 @@ foldUnionMergeOne g mv v =
     Nothing -> Right (mempty, v)
     Just w -> g w v
 
-foldUnionMergeMany :: Monoid r => (v -> v -> Either e (r, v)) -> UnionMergeMany e v r
-foldUnionMergeMany g mv (y :| ys) = start where
+foldUnionMergeMany :: (Foldable f, Monoid r) => Either e v -> (v -> v -> Either e (r, v)) -> UnionMergeMany f e v r
+foldUnionMergeMany onE g mv fv = start where
   start =
-    case mv of
-      Nothing -> go mempty y ys
-      Just v -> go mempty v (y:ys)
+    let vs = toList fv
+    in case maybe vs (:vs) mv of
+      [] -> fmap (mempty,) onE
+      y:ys -> go mempty y ys
   go !r !v = \case
     [] -> Right (r, v)
     w:ws ->
@@ -109,11 +107,11 @@ foldUnionMergeMany g mv (y :| ys) = start where
         Right (s, u) -> go (r <> s) u ws
         e@(Left _) -> e
 
-semigroupUnionMergeOne :: Semigroup v => UnionMergeOne e v ()
-semigroupUnionMergeOne mv v = Right ((), maybe v (<> v) mv)
+concatUnionMergeOne :: Semigroup v => UnionMergeOne e v ()
+concatUnionMergeOne mv v = Right ((), maybe v (<> v) mv)
 
-semigroupUnionMergeMany :: Semigroup v => UnionMergeMany e v ()
-semigroupUnionMergeMany mv vs = Right ((), sconcat (maybe vs (`NE.cons` vs) mv))
+concatUnionMergeMany :: (Foldable f, Monoid v) => UnionMergeMany f e v ()
+concatUnionMergeMany mv vs = concatUnionMergeOne mv (fold vs)
 
 newtype UnionMap k v = UnionMap { unUnionMap :: IntLikeMap k (UnionEntry k v) }
   deriving stock (Eq, Show, Generic, Functor, Foldable, Traversable)
@@ -318,7 +316,7 @@ mergeOneUnionMapLM l g k j = mayStateLens l $ \u ->
 mergeOneUnionMapM :: (Coercible k Int, Eq k, MonadState (UnionMap k v) m) => UnionMergeOne e v r -> k -> k -> m (UnionMapMergeVal e k v r)
 mergeOneUnionMapM = mergeOneUnionMapLM id
 
-mergeManyUnionMap :: (Coercible k Int, Eq k) => UnionMergeMany e v r -> k -> NonEmpty k -> UnionMap k v -> UnionMapMergeRes e k v r
+mergeManyUnionMap :: (Traversable f, Coercible k Int, Eq k) => UnionMergeMany f e v r -> k -> f k -> UnionMap k v -> UnionMapMergeRes e k v r
 mergeManyUnionMap = undefined
 -- mergeManyUnionMap g k js u = goLookupK where
 --   doCompact kr mw acc =
@@ -366,12 +364,12 @@ mergeManyUnionMap = undefined
 --     let y = UnionMap (ILM.insert kr (UnionEntryValue gv) (unUnionMap (fromMaybe u mw)))
 --     in UnionMapMergeResMerged kr gv (Just y)
 
-mergeManyUnionMapLM :: (Coercible k Int, Eq k, MonadState s m) => UnionMapLens s k v -> UnionMergeMany e v r -> k -> NonEmpty k -> m (UnionMapMergeVal e k v r)
+mergeManyUnionMapLM :: (Traversable f, Coercible k Int, Eq k, MonadState s m) => UnionMapLens s k v -> UnionMergeMany f e v r -> k -> f k -> m (UnionMapMergeVal e k v r)
 mergeManyUnionMapLM l g k js = mayStateLens l $ \u ->
   case mergeManyUnionMap g k js u of
     UnionMapMergeResMissing x -> (UnionMapMergeValMissing x, Nothing)
     UnionMapMergeResEmbed e -> (UnionMapMergeValEmbed e, Nothing)
     UnionMapMergeResMerged x y r w -> (UnionMapMergeValMerged x y r, Just w)
 
-mergeManyUnionMapM :: (Coercible k Int, Eq k, MonadState (UnionMap k v) m) => UnionMergeMany e v r -> k -> NonEmpty k -> m (UnionMapMergeVal e k v r)
+mergeManyUnionMapM :: (Traversable f, Coercible k Int, Eq k, MonadState (UnionMap k v) m) => UnionMergeMany f e v r -> k -> f k -> m (UnionMapMergeVal e k v r)
 mergeManyUnionMapM = mergeManyUnionMapLM id

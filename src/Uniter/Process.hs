@@ -6,8 +6,8 @@ import Control.Exception (Exception)
 import Control.Monad (when)
 import Control.Monad.Except (Except, MonadError (..), runExcept)
 import Control.Monad.State.Strict (MonadState, StateT, gets, runStateT, state)
+import Control.Monad.Writer.Strict (WriterT, runWriterT, tell, MonadWriter)
 import Control.Monad.Trans (lift)
-import Control.Monad.Trans.Writer.Strict (runWriterT, tell)
 import Data.Functor (($>))
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
@@ -55,9 +55,11 @@ newtype ProcessM e f a = ProcessM
 instance MonadHalt (ProcessError e) (ProcessM e f) where
   halt = ProcessM . throwError
 
+-- TODO flip exceptt and statet to get state on error
 runProcessM :: ProcessM e f a -> ProcessState f -> Either (ProcessError e) (a, ProcessState f)
 runProcessM p = runExcept . runStateT (unProcessM p)
 
+-- TODO can remove this because the checks happen inline
 guardNewP :: BoundId -> ProcessM e f ()
 guardNewP i = do
   isMem <- gets (memberUnionMap i . psUnionMap)
@@ -70,15 +72,27 @@ lookupP i = do
     UnionMapLookupValMissing x -> halt (ProcessErrorMissing x)
     UnionMapLookupValOk r d _ -> pure (r, d)
 
-data Item = Item
-  { itemLeft :: !BoundId
-  , itemRight :: !BoundId
-  , itemRoot :: !BoundId
-  }
-  deriving stock (Eq, Show)
+data Duo a = Duo !a !a
+  deriving stock (Eq, Show, Functor, Foldable, Traversable)
 
-alignMerge :: Alignable e f => BoundId -> UnionMergeMany e (Defn f) (Seq Item, BoundId)
-alignMerge = undefined
+data Item = Item
+  { itemChildren :: !(Duo BoundId)
+  , itemRoot :: !BoundId
+  } deriving stock (Eq, Show)
+
+newtype AlignM e a = AlignM { unAlignM :: WriterT (Seq Item) (StateT BoundId (Except e)) a }
+  deriving newtype (Functor, Applicative, Monad, MonadWriter (Seq Item), MonadState BoundId)
+
+instance MonadHalt e (AlignM e) where
+  halt = AlignM . throwError
+
+runAlignM :: AlignM e a -> BoundId -> Either e (a, BoundId, Seq Item)
+runAlignM al b = fmap (\((a, w), s) -> (a, s, w)) (runExcept (runStateT (runWriterT (unAlignM al)) b))
+
+alignMerge :: Alignable e f => BoundId -> UnionMergeMany Duo (ProcessError e) (Defn f) (Seq Item, BoundId)
+alignMerge b mv (Duo di dj) = res where
+  res = fmap (\(v, s, w) -> ((w, s), v)) (runAlignM body b)
+  body = undefined
 -- case (di, dj) of
 --   (DefnFresh, _) -> mergeP rootItem $> rest
 --   (_, DefnFresh) -> mergeP rootItem $> rest
@@ -100,12 +114,18 @@ mergeP = undefined
 freshP :: ProcessM e f BoundId
 freshP = state (\st -> let uniq = psUnique st in (uniq, st { psUnique = succ uniq }))
 
+-- TODO need to define fresh before merging?
+emitP :: Alignable e f => Item -> ProcessM e f ()
+emitP = emitRecP . Seq.singleton
+
 emitRecP :: Alignable e f => Seq Item -> ProcessM e f ()
 emitRecP = \case
     Empty -> pure ()
     it :<| rest -> do
       guardNewP (itemRoot it)
       newIts <- mergeP it
+      -- TODO need to define fresh here?
+      -- for_ newIts $ \newIt -> defineP DefnFresh (itemRoot newIt)
       emitRecP (newIts <> rest)
 
 defineP :: Defn f -> BoundId -> ProcessM e f ()
@@ -118,5 +138,5 @@ defineP d i = do
 
 instance Alignable e f => EventHandler (ProcessError e) f (ProcessM e f) where
   handleAddNode = defineP . DefnNode
-  handleEmitEq i j y = emitRecP (Seq.singleton (Item i j y))
+  handleEmitEq i j y = emitP (Item (Duo i j) y)
   handleFresh = defineP DefnFresh
