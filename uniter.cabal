@@ -25,18 +25,18 @@ source-repository head
 library
   exposed-modules:
       Test.Uniter.Assertions
+      Test.Uniter.Example
+      Test.Uniter.Exp
       Test.Uniter.Main
+      Test.Uniter.Scratch
       Test.Uniter.State
       Uniter
       Uniter.Align
       Uniter.Core
       Uniter.Env
-      Uniter.Example
-      Uniter.Exp
       Uniter.Graph
       Uniter.Halt
       Uniter.Process
-      Uniter.Scratch
       Uniter.State
       Uniter.UnionMap
   other-modules:

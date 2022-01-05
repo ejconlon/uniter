@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Uniter.Example where
+module Test.Uniter.Example where
 
-import Uniter.Exp (Exp (..))
+import Test.Uniter.Exp (Exp (..))
 
 exampleLinear :: Exp
 exampleLinear =

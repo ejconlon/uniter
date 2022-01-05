@@ -1,13 +1,19 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module Uniter.Process where
+module Uniter.Process
+  ( ProcessError (..)
+  , Defn (..)
+  , ProcessState (..)
+  , newProcessState
+  , ProcessM
+  , runProcessM
+  ) where
 
 import Control.Exception (Exception)
-import Control.Monad (when)
 import Control.Monad.Except (Except, MonadError (..), runExcept)
-import Control.Monad.State.Strict (MonadState, StateT, gets, runStateT, state)
-import Control.Monad.Writer.Strict (WriterT, runWriterT, tell, MonadWriter)
-import Control.Monad.Trans (lift)
+import Control.Monad.State.Strict (MonadState, StateT, gets, modify', runStateT, state)
+import Control.Monad.Writer.Strict (MonadWriter, WriterT, runWriterT, tell)
+import Data.Foldable (for_)
 import Data.Functor (($>))
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
@@ -17,9 +23,8 @@ import Lens.Micro (lens)
 import Uniter.Align (Alignable (..))
 import Uniter.Core (BoundId (..), EventHandler (..), Node (..))
 import Uniter.Halt (MonadHalt (halt))
-import Uniter.UnionMap (UnionMap, UnionMapAddVal (..), UnionMapLens,
-                        UnionMapLookupVal (UnionMapLookupValMissing, UnionMapLookupValOk), UnionMergeMany,
-                        addUnionMapLM, emptyUnionMap, lookupUnionMapLM, memberUnionMap, mergeManyUnionMapLM)
+import Uniter.UnionMap (UnionMap, UnionMapAddVal (..), UnionMapLens, UnionMapLookupVal (..), UnionMapMergeVal (..),
+                        UnionMergeMany, addUnionMapLM, emptyUnionMap, lookupUnionMapLM, mergeManyUnionMapLM)
 
 data ProcessError e =
     ProcessErrorDuplicate !BoundId
@@ -60,10 +65,10 @@ runProcessM :: ProcessM e f a -> ProcessState f -> Either (ProcessError e) (a, P
 runProcessM p = runExcept . runStateT (unProcessM p)
 
 -- TODO can remove this because the checks happen inline
-guardNewP :: BoundId -> ProcessM e f ()
-guardNewP i = do
-  isMem <- gets (memberUnionMap i . psUnionMap)
-  when isMem (halt (ProcessErrorDuplicate i))
+-- guardNewP :: BoundId -> ProcessM e f ()
+-- guardNewP i = do
+--   isMem <- gets (memberUnionMap i . psUnionMap)
+--   when isMem (halt (ProcessErrorDuplicate i))
 
 lookupP :: BoundId -> ProcessM e f (BoundId, Defn f)
 lookupP i = do
@@ -89,48 +94,65 @@ instance MonadHalt e (AlignM e) where
 runAlignM :: AlignM e a -> BoundId -> Either e (a, BoundId, Seq Item)
 runAlignM al b = fmap (\((a, w), s) -> (a, s, w)) (runExcept (runStateT (runWriterT (unAlignM al)) b))
 
-alignMerge :: Alignable e f => BoundId -> UnionMergeMany Duo (ProcessError e) (Defn f) (Seq Item, BoundId)
-alignMerge b mv (Duo di dj) = res where
-  res = fmap (\(v, s, w) -> ((w, s), v)) (runAlignM body b)
-  body = undefined
--- case (di, dj) of
---   (DefnFresh, _) -> mergeP rootItem $> rest
---   (_, DefnFresh) -> mergeP rootItem $> rest
---   (DefnNode (Node ni), DefnNode (Node nj)) -> do
---     case align ni nj of
---       Left e -> halt (ProcessErrorEmbed e)
---       Right g -> do
---         (ny, addlTriples) <- runWriterT $ for g $ \(a, b) -> do
---           c <- lift freshP
---           let item = Item a b c
---           tell (Seq.singleton item)
---           pure c
---         mergeP  (DefnNode (Node ny))
---         pure (addlTriples <> triples)
+alignDefns :: Alignable e f => Defn f -> Defn f -> AlignM e (Defn f)
+alignDefns da db =
+  case (da, db) of
+    (DefnFresh, _) -> pure db
+    (_, DefnFresh) -> pure da
+    (DefnNode (Node na), DefnNode (Node nb)) -> do
+      case alignWith Duo na nb of
+        Left e -> halt e
+        Right g -> do
+          h <- for g $ \duo -> do
+            root <- state (\x -> (x, succ x))
+            let item = Item duo root
+            tell (Seq.singleton item)
+            pure root
+          pure (DefnNode (Node h))
 
-mergeP :: Item -> ProcessM e f (Seq Item)
-mergeP = undefined
+alignMerge :: Alignable e f => BoundId -> UnionMergeMany Duo e (Defn f) (Seq Item, BoundId)
+alignMerge b mdx (Duo di dj) = res where
+  res = fmap (\(v, s, w) -> ((w, s), v)) (runAlignM body b)
+  body = do
+    case mdx of
+      Just dx -> do
+        dy <- alignDefns dx di
+        alignDefns dy dj
+      Nothing -> error "impossible"
+
+mergeP :: Alignable e f => Item -> ProcessM e f (Seq Item)
+mergeP (Item children root) = do
+  b <- gets psUnique
+  erb <- mergeManyUnionMapLM psUnionMapL (alignMerge b) root children
+  case erb of
+    UnionMapMergeValMissing i -> halt (ProcessErrorMissing i)
+    UnionMapMergeValEmbed e -> halt (ProcessErrorEmbed e)
+    UnionMapMergeValMerged _ _ (r, i) -> modify' (\st -> st { psUnique = i }) $> r
 
 freshP :: ProcessM e f BoundId
 freshP = state (\st -> let uniq = psUnique st in (uniq, st { psUnique = succ uniq }))
 
--- TODO need to define fresh before merging?
 emitP :: Alignable e f => Item -> ProcessM e f ()
-emitP = emitRecP . Seq.singleton
+emitP it = do
+  -- TODO need to define fresh here?
+  defineP DefnFresh (itemRoot it)
+  emitRecP (Seq.singleton it)
 
 emitRecP :: Alignable e f => Seq Item -> ProcessM e f ()
 emitRecP = \case
     Empty -> pure ()
     it :<| rest -> do
-      guardNewP (itemRoot it)
+      -- TODO disabled guard because will check inline
+      -- guardNewP (itemRoot it)
       newIts <- mergeP it
       -- TODO need to define fresh here?
-      -- for_ newIts $ \newIt -> defineP DefnFresh (itemRoot newIt)
+      for_ newIts $ \newIt -> defineP DefnFresh (itemRoot newIt)
       emitRecP (newIts <> rest)
 
 defineP :: Defn f -> BoundId -> ProcessM e f ()
 defineP d i = do
-  guardNewP i
+  -- TODO disabled guard because will check inline
+  -- guardNewP i
   val <- addUnionMapLM psUnionMapL i d
   case val of
     UnionMapAddValAdded -> pure ()

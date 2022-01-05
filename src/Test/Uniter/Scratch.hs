@@ -1,4 +1,4 @@
-module Uniter.Scratch () where
+module Test.Uniter.Scratch () where
 
 
 -- newtype Part f = Part { unPart :: Free f BoundId }

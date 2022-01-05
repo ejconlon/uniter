@@ -1,6 +1,6 @@
 {-# LANGUAGE TemplateHaskell #-}
 
-module Uniter.Exp where
+module Test.Uniter.Exp where
 
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Text (Text)

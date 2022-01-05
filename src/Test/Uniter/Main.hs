@@ -12,9 +12,8 @@ import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Uniter.Assertions (testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
 import Uniter.UnionMap (Changed (..), UnionMap, UnionMapAddVal (..), UnionMapLookupVal (..), UnionMapMergeVal (..),
-                        UnionMapTraceRes (..), UnionMergeOne, addUnionMapM, emptyUnionMap, equivUnionMapM,
-                        lookupUnionMapM, mergeOneUnionMapM, concatUnionMergeOne, sizeUnionMap, traceUnionMap,
-                        valuesUnionMap)
+                        UnionMapTraceRes (..), UnionMergeOne, addUnionMapM, concatUnionMergeOne, emptyUnionMap,
+                        equivUnionMapM, lookupUnionMapM, mergeOneUnionMapM, sizeUnionMap, traceUnionMap, valuesUnionMap)
 
 newtype V = V { unV :: Int }
   deriving newtype (Eq)

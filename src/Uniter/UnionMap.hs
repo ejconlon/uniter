@@ -49,7 +49,7 @@ module Uniter.UnionMap
 import Control.DeepSeq (NFData)
 import Control.Monad.State.Strict (MonadState)
 import Data.Coerce (Coercible)
-import Data.Foldable (foldl', fold, toList)
+import Data.Foldable (fold, foldl', toList)
 import Data.Maybe (fromMaybe)
 import GHC.Generics (Generic)
 import Lens.Micro (Lens')
