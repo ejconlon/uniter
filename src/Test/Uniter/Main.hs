@@ -101,59 +101,36 @@ testUmSimple = testUnit "UM simple" $ runS emptyUMV $ do
     fwd === multiMapVV [('a', "c"), ('z', "b")]
     bwd === mapVV [('b', 'z'), ('c', 'a')]
 
--- testUfRec :: TestTree
--- testUfRec = testUnit "UF rec" $ runS efNew $ do
---   _ <- applyS (efAdd (toV 'a'))
---   _ <- applyS (efAdd (toV 'b'))
---   _ <- applyS (efAdd (toV 'c'))
---   applyTestS (efMerge (toV 'b') (toV 'c')) $ \res ef -> do
---     res === Just (toV 'b', setV "c")
---     efRootsSize ef === 2
---     efLeavesSize ef === 1
---     efTotalSize ef === 3
---     ILS.fromList (efRoots ef) === setV "ab"
---     ILS.fromList (efLeaves ef) === setV "c"
---     efFwd ef === multiMapV [('a', ""), ('b', "c")]
---     efBwd ef === mapV [('c', 'b')]
---   applyTestS (efMerge (toV 'a') (toV 'c')) $ \res ef -> do
---     res === Just (toV 'a', setV "bc")
---     efRootsSize ef === 1
---     efLeavesSize ef === 2
---     efTotalSize ef === 3
---     ILS.fromList (efRoots ef) === setV "a"
---     ILS.fromList (efLeaves ef) === setV "bc"
---     efFwd ef === multiMapV [('a', "bc")]
---     efBwd ef === mapV [('b', 'a'), ('c', 'a')]
-
--- testUfMany :: TestTree
--- testUfMany = testUnit "UF many" $ runS efNew $ do
---   _ <- applyS (efAdd (toV 'a'))
---   _ <- applyS (efAdd (toV 'b'))
---   _ <- applyS (efAdd (toV 'c'))
---   _ <- applyS (efAdd (toV 'd'))
---   _ <- applyS (efAdd (toV 'e'))
---   applyTestS (efMergeSets [setV "cde"]) $ \res ef -> do
---     res === Just (setV "c", setV "de")
---     efRootsSize ef === 3
---     efLeavesSize ef === 2
---     efTotalSize ef === 5
---     ILS.fromList (efRoots ef) === setV "abc"
---     ILS.fromList (efLeaves ef) === setV "de"
---     efFwd ef === multiMapV [('a', ""), ('b', ""), ('c', "de")]
---     efBwd ef === mapV [('d', 'c'), ('e', 'c')]
---   applyTestS (efMergeSets [setV "abd"]) $ \res ef -> do
---     res === Just (setV "a", setV "bcde")
---     efRootsSize ef === 1
---     efLeavesSize ef === 4
---     efTotalSize ef === 5
---     ILS.fromList (efRoots ef) === setV "a"
---     ILS.fromList (efLeaves ef) === setV "bcde"
---     efFwd ef === multiMapV [('a', "bcde")]
---     efBwd ef === mapV [('b', 'a'), ('c', 'a'), ('d', 'a'), ('e', 'a')]
+testUmRec :: TestTree
+testUmRec = testUnit "UM rec" $ runS emptyUMV $ do
+  _ <- applyS (addUnionMapS (toV 'a') 1)
+  _ <- applyS (addUnionMapS (toV 'b') 2)
+  _ <- applyS (addUnionMapS (toV 'c') 3)
+  applyTestS (mergeOneUnionMapS mergeOneUMV (toV 'b') (toV 'c')) $ \res um -> do
+    res === UnionMapMergeValOk (toV 'b') 3
+    sizeUnionMap um === 3
+    traceUnionMap (toV 'a') um === UnionMapTraceResFound (toV 'a') 1 []
+    traceUnionMap (toV 'b') um === UnionMapTraceResFound (toV 'b') 3 []
+    traceUnionMap (toV 'c') um === UnionMapTraceResFound (toV 'b') 3 []
+    valuesUnionMap um === mapV [('a', 1), ('b', 3)]
+  applyTestS equivUnionMapS $ \(fwd, bwd) _ -> do
+    fwd === multiMapVV [('a', ""), ('b', "c")]
+    bwd === mapVV [('c', 'b')]
+  applyTestS (mergeOneUnionMapS mergeOneUMV (toV 'a') (toV 'b')) $ \res um -> do
+    res === UnionMapMergeValOk (toV 'a') 3
+    sizeUnionMap um === 3
+    traceUnionMap (toV 'a') um === UnionMapTraceResFound (toV 'a') 3 []
+    traceUnionMap (toV 'b') um === UnionMapTraceResFound (toV 'a') 3 []
+    traceUnionMap (toV 'c') um === UnionMapTraceResFound (toV 'a') 3 [toV 'b']
+    valuesUnionMap um === mapV [('a', 3)]
+  applyTestS equivUnionMapS $ \(fwd, bwd) _ -> do
+    fwd === multiMapVV [('a', "bc")]
+    bwd === mapVV [('b', 'a'), ('c', 'a')]
 
 testUmUnit :: TestTree
 testUmUnit = testGroup "UM unit"
   [ testUmSimple
+  , testUmRec
   ]
 
 main :: IO ()

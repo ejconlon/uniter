@@ -134,7 +134,7 @@ traceUnionMap k (UnionMap m) = go [] k where
       Nothing -> UnionMapTraceResMissing j
       Just link -> case link of
         UnionEntryLink kx -> go (j:acc) kx
-        UnionEntryValue v -> UnionMapTraceResFound j v (safeTail acc)
+        UnionEntryValue v -> UnionMapTraceResFound j v (safeTail (reverse acc))
 
 data UnionMapLookupRes k v =
     UnionMapLookupResMissing !k
