@@ -47,7 +47,7 @@ module Uniter.UnionMap
   ) where
 
 import Control.DeepSeq (NFData)
-import Control.Monad.State.Strict (MonadState)
+import Control.Monad.State.Strict (MonadState, get, put)
 import Data.Coerce (Coercible)
 import Data.Foldable (fold, foldl', toList)
 import Data.Maybe (fromMaybe)
@@ -57,7 +57,8 @@ import Overeasy.IntLike.Map (IntLikeMap)
 import qualified Overeasy.IntLike.Map as ILM
 import Overeasy.IntLike.Set (IntLikeSet)
 import qualified Overeasy.IntLike.Set as ILS
-import Uniter.State (mayStateLens)
+import Uniter.Halt (halt)
+import Uniter.State (mayStateLens, runIterM)
 
 safeInit :: [a] -> [a]
 safeInit xs =
@@ -274,30 +275,23 @@ data UnionMapMergeRes e k v r =
 
 mergeOneUnionMap :: (Coercible k Int, Eq k) => UnionMergeOne e v r -> k -> k -> UnionMap k v -> UnionMapMergeRes e k v r
 mergeOneUnionMap g k j u = goLookupK where
-  doCompact kr w acc =
-    if null acc
-      then w
-      else UnionMap (foldl' (\m x -> ILM.insert x (UnionEntryLink kr) m) (unUnionMap w) acc)
+  doCompactCheck kr jr w jacc = doCompact kr w (if kr == jr then jacc else jr:jacc)
+  doCompact kr w acc = UnionMap (foldl' (\m x -> ILM.insert x (UnionEntryLink kr) m) (unUnionMap w) acc)
   doRoot kr gv w = UnionMap (ILM.insert kr (UnionEntryValue gv) (unUnionMap w))
   goLookupK = case lookupUnionMap k u of
-    UnionMapLookupResMissing kx ->
-      if k == kx
-        then goAssign
-        else UnionMapMergeResMissing kx
+    UnionMapLookupResMissing kx -> if k == kx then goAssign else UnionMapMergeResMissing kx
     UnionMapLookupResFound kr kv mw -> goLookupJ kr kv (fromMaybe u mw)
   goAssign = case traceUnionMap j u of
     UnionMapTraceResMissing jx -> UnionMapMergeResMissing jx
-    UnionMapTraceResFound jr jv jacc -> goMerge k Nothing jr jv jacc u
+    UnionMapTraceResFound jr jv jacc -> goMerge k Nothing jv (doCompactCheck k jr u jacc)
   goLookupJ kr kv w = case traceUnionMap j w of
     UnionMapTraceResMissing jx -> UnionMapMergeResMissing jx
-    UnionMapTraceResFound jr jv jacc -> goMerge kr (Just kv) jr jv jacc w
-  goMerge kr mkv jr jv jacc w =
+    UnionMapTraceResFound jr jv jacc -> goMerge kr (Just kv) jv (doCompactCheck kr jr w jacc)
+  goMerge kr mkv jv w1 =
     case g mkv jv of
       Left e -> UnionMapMergeResEmbed e
       Right (r, gv) ->
-        let acc = if kr == jr then jacc else jr:jacc
-            w1 = doCompact kr w acc
-            w2 = doRoot kr jv w1
+        let w2 = doRoot kr gv w1
         in UnionMapMergeResMerged kr gv r w2
 
 data UnionMapMergeVal e k v r =
@@ -317,52 +311,35 @@ mergeOneUnionMapM :: (Coercible k Int, Eq k, MonadState (UnionMap k v) m) => Uni
 mergeOneUnionMapM = mergeOneUnionMapLM id
 
 mergeManyUnionMap :: (Traversable f, Coercible k Int, Eq k) => UnionMergeMany f e v r -> k -> f k -> UnionMap k v -> UnionMapMergeRes e k v r
-mergeManyUnionMap = undefined
--- mergeManyUnionMap g k js u = goLookupK where
---   doCompact kr mw acc =
---     if null acc
---       then mw
---       else Just (UnionMap (foldl' (\m x -> ILM.insert x (UnionEntryLink kr) m) (unUnionMap (fromMaybe u mw)) acc))
---   doRoot kr gv mw = UnionMap (ILM.insert kr (UnionEntryValue gv) (unUnionMap (fromMaybe u mw)))
---   goLookupK = case lookupUnionMap k u of
---     UnionMapLookupResMissing kx ->
---       if k == kx
---         then goAssign
---         else UnionMapMergeResMissing kx
---     UnionMapLookupResFound kr kv mw -> goLookupJs kr kv mw
---   doTraceJsRec kr xs vs mw =
---     case xs of
---       [] -> Right (reverse vs, mw)  -- reverse to put in lookup order
---       y:ys -> case traceUnionMap y (fromMaybe u mw) of
---         UnionMapTraceResMissing jx -> Left jx
---         UnionMapTraceResFound jr jv jacc ->
---           if kr == jr
---             then doTraceJsRec kr ys vs (doCompact kr mw jacc)
---             else doTraceJsRec kr ys (jv:vs) (doCompact kr mw (jr:jacc))
---   doTraceJs kr mw = doTraceJsRec kr (NE.toList js) [] mw
---   goAssign =
---     case doTraceJs k Nothing of
---       Left jx -> UnionMapMergeResMissing jx
---       Right (vs, mu) ->
---         case vs of
---           [] -> UnionMapMergeResEmpty
---           p:ps ->
---             case g Nothing (p :| ps) of
---               Left e -> UnionMapMergeResEmbed e
---               Right (r, gv) -> goUpdate k gv mu
---   goLookupJs kr kv mw =
---     case doTraceJs kr mw of
---       Left jx -> UnionMapMergeResMissing jx
---       Right (vs, mu) ->
---         case vs of
---           [] -> goUpdate kr kv mu
---           p:ps ->
---             case g (Just kv) (p :| ps) of
---               Left e -> UnionMapMergeResEmbed e
---               Right (r, gv) -> goUpdate kr gv mu
---   goUpdate kr gv mw =
---     let y = UnionMap (ILM.insert kr (UnionEntryValue gv) (unUnionMap (fromMaybe u mw)))
---     in UnionMapMergeResMerged kr gv (Just y)
+mergeManyUnionMap g k js u = goLookupK where
+  doCompactCheck kr jr w jacc = doCompact kr w (if kr == jr then jacc else jr:jacc)
+  doCompact kr w acc = UnionMap (foldl' (\m x -> ILM.insert x (UnionEntryLink kr) m) (unUnionMap w) acc)
+  doRoot kr gv w = UnionMap (ILM.insert kr (UnionEntryValue gv) (unUnionMap w))
+  doTraceJ kr y = do
+    w <- get
+    case traceUnionMap y w of
+      UnionMapTraceResMissing jx -> halt jx
+      UnionMapTraceResFound jr jv jacc -> do
+        put (doCompactCheck kr jr w jacc)
+        pure jv
+  doTraceJs kr w = runIterM (traverse (doTraceJ kr) js) w
+  goLookupK = case lookupUnionMap k u of
+    UnionMapLookupResMissing kx -> if k == kx then goAssign else UnionMapMergeResMissing kx
+    UnionMapLookupResFound kr kv mw -> goLookupJs kr kv (fromMaybe u mw)
+  goAssign =
+    case doTraceJs k u of
+      Left jx -> UnionMapMergeResMissing jx
+      Right (jvs, w1) -> goMerge k Nothing jvs w1
+  goLookupJs kr kv w =
+    case doTraceJs kr w of
+      Left jx -> UnionMapMergeResMissing jx
+      Right (jvs, w1) -> goMerge kr (Just kv) jvs w1
+  goMerge kr mkv jvs w1 =
+    case g mkv jvs of
+      Left e -> UnionMapMergeResEmbed e
+      Right (r, gv) ->
+        let w2 = doRoot kr gv w1
+        in UnionMapMergeResMerged kr gv r w2
 
 mergeManyUnionMapLM :: (Traversable f, Coercible k Int, Eq k, MonadState s m) => UnionMapLens s k v -> UnionMergeMany f e v r -> k -> f k -> m (UnionMapMergeVal e k v r)
 mergeManyUnionMapLM l g k js = mayStateLens l $ \u ->
