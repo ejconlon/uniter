@@ -40,7 +40,7 @@ import Control.DeepSeq (NFData)
 import Control.Monad.State.Strict (State, state)
 import Data.Coerce (Coercible)
 import Data.Foldable (foldl')
-import Data.List.NonEmpty (NonEmpty (..))
+import Data.List.NonEmpty (NonEmpty (..), (<|))
 import Data.Maybe (fromMaybe)
 import Data.Semigroup (sconcat)
 import GHC.Generics (Generic)
@@ -72,10 +72,10 @@ data UnionEntry k v =
   deriving anyclass (NFData)
 
 type UnionMergeOne e v = v -> v -> Either e v
-type UnionMergeMany e v = v -> [v] -> Either e v
+type UnionMergeMany e v = v -> NonEmpty v -> Either e v
 
 foldUnionMergeMany :: UnionMergeOne e v -> UnionMergeMany e v
-foldUnionMergeMany f = go where
+foldUnionMergeMany f a (b :| bs) = go a (b:bs) where
   go v = \case
     [] -> Right v
     w:ws ->
@@ -87,7 +87,7 @@ semigroupUnionMergeOne :: Semigroup v => UnionMergeOne e v
 semigroupUnionMergeOne v w = Right (v <> w)
 
 semigroupUnionMergeMany :: Semigroup v => UnionMergeMany e v
-semigroupUnionMergeMany v vs = Right (sconcat (v :| vs))
+semigroupUnionMergeMany v vs = Right (sconcat (v <| vs))
 
 newtype UnionMap k v = UnionMap { unUnionMap :: IntLikeMap k (UnionEntry k v) }
   deriving stock (Eq, Show, Generic, Functor, Foldable, Traversable)
