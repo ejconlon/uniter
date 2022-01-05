@@ -37,6 +37,7 @@ library
       Uniter.Halt
       Uniter.Process
       Uniter.Scratch
+      Uniter.State
       Uniter.UnionMap
   other-modules:
       Paths_uniter
@@ -76,6 +77,8 @@ library
     , deepseq
     , hashable
     , hedgehog
+    , microlens
+    , microlens-mtl
     , mtl
     , overeasy
     , recursion-schemes
@@ -128,6 +131,8 @@ test-suite uniter-test
     , deepseq
     , hashable
     , hedgehog
+    , microlens
+    , microlens-mtl
     , mtl
     , overeasy
     , recursion-schemes

@@ -5,22 +5,23 @@ module Uniter.Process where
 import Control.Exception (Exception)
 import Control.Monad (when)
 import Control.Monad.Except (Except, MonadError (..), runExcept)
-import Control.Monad.State.Strict (MonadState, StateT, gets, modify', runStateT, state)
+import Control.Monad.State.Strict (MonadState, StateT, gets, runStateT, state)
 import Control.Monad.Trans (lift)
 import Control.Monad.Trans.Writer.Strict (runWriterT, tell)
 import Data.Functor (($>))
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
-import Overeasy.EquivFind (EquivFind, efAddInc, efFindRoot, efMember)
+import Lens.Micro (lens)
 import Overeasy.IntLike.Set (IntLikeSet)
 import qualified Overeasy.IntLike.Set as ILS
 import Uniter.Align (Alignable (..))
 import Uniter.Core (BoundId (..), EventHandler (..), Node (..))
 import Uniter.Halt (MonadHalt (halt))
+import Uniter.UnionMap (UnionMap, UnionMapAddVal (..), UnionMapLens,
+                        UnionMapLookupVal (UnionMapLookupValMissing, UnionMapLookupValOk), addUnionMapLM, emptyUnionMap,
+                        lookupUnionMapLM, memberUnionMap)
 
 data ProcessError e =
     ProcessErrorDuplicate !BoundId
@@ -38,11 +39,16 @@ deriving stock instance Show (f BoundId) => Show (Defn f)
 
 data ProcessState f = ProcessState
   { psUnique :: !BoundId
-  , psEquiv :: !(EquivFind BoundId)
-  , psNodes :: Map BoundId (Defn f)
+  , psUnionMap :: !(UnionMap BoundId (Defn f))
   }
 deriving stock instance Eq (f BoundId) => Eq (ProcessState f)
 deriving stock instance Show (f BoundId) => Show (ProcessState f)
+
+psUnionMapL :: UnionMapLens (ProcessState f) BoundId (Defn f)
+psUnionMapL = lens psUnionMap (\ps um -> ps { psUnionMap = um })
+
+newProcessState :: BoundId -> ProcessState f
+newProcessState uniq = ProcessState uniq emptyUnionMap
 
 newtype ProcessM e f a = ProcessM
   { unProcessM :: StateT (ProcessState f) (Except (ProcessError e) ) a
@@ -56,15 +62,15 @@ runProcessM p = runExcept . runStateT (unProcessM p)
 
 guardNewP :: BoundId -> ProcessM e f ()
 guardNewP i = do
-  isMem <- gets (efMember i . psEquiv)
+  isMem <- gets (memberUnionMap i . psUnionMap)
   when isMem (halt (ProcessErrorDuplicate i))
 
 lookupP :: BoundId -> ProcessM e f (BoundId, Defn f)
 lookupP i = do
-  mayRoot <- gets (efFindRoot i . psEquiv)
-  case mayRoot of
-    Nothing -> halt (ProcessErrorMissing i)
-    Just r -> gets (\st -> (r, psNodes st Map.! r))
+  val <- lookupUnionMapLM psUnionMapL i
+  case val of
+    UnionMapLookupValMissing x -> halt (ProcessErrorMissing x)
+    UnionMapLookupValOk r d _ -> pure (r, d)
 
 mergeP :: IntLikeSet BoundId -> ProcessM e f ()
 mergeP = undefined
@@ -106,10 +112,10 @@ emitRecP = \case
 defineP :: Defn f -> BoundId -> ProcessM e f ()
 defineP d i = do
   guardNewP i
-  modify' $ \(ProcessState uniq equiv nodes) ->
-    let equiv' = snd (efAddInc i equiv)
-        nodes' = Map.insert i d nodes
-    in ProcessState uniq equiv' nodes'
+  val <- addUnionMapLM psUnionMapL i d
+  case val of
+    UnionMapAddValAdded -> pure ()
+    UnionMapAddValDuplicate -> halt (ProcessErrorDuplicate i)
 
 instance Alignable e f => EventHandler (ProcessError e) f (ProcessM e f) where
   handleAddNode = defineP . DefnNode

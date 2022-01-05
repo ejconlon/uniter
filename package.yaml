@@ -20,6 +20,8 @@ dependencies:
 - containers
 - deepseq
 - hashable
+- microlens
+- microlens-mtl
 - mtl
 - recursion-schemes
 - streaming
