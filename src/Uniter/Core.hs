@@ -101,8 +101,16 @@ subInterpESM v = \case
       UniterAddNode n k -> state (\b -> (b, succ b)) >>= \y -> S.wrap (EventAddNode n y (subInterpESM v (k y)))
       UniterFresh k -> state (\b -> (b, succ b)) >>= \y -> S.wrap (EventFresh y (subInterpESM v (k y)))
 
+evalStream :: EventStreamM e f (E v) r -> v -> BoundId -> EventStream e f (r, BoundId)
+evalStream s0 v i0 = go i0 s0 where
+  go i s =
+    let (e, j) = runE (S.inspect s) v i
+    in case e of
+      Left r -> pure (r, j)
+      Right f -> S.wrap (fmap (go j) f)
+
 streamUniter :: UniterM v e f r -> v -> BoundId -> EventStream e f (r, BoundId)
-streamUniter u v bid = S.hoist (\x -> Identity (fst (runE x v bid))) (interpESM v u >>= \r -> get >>= \bid' -> pure (r, bid'))
+streamUniter u v = evalStream (interpESM v u) v
 
 class Unitable v e g f | f -> v e g where
   unite :: f (UniterM v e g BoundId) -> UniterM v e g BoundId

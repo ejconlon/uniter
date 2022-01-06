@@ -4,6 +4,7 @@
 module Uniter.Render
   ( renderDot
   , renderDoc
+  , boundEnvGraph
   ) where
 
 import Algebra.Graph (Graph, edge, vertex)
@@ -43,8 +44,9 @@ reprLookup x b = case lookupBoundEnv b x of
 renderDot :: (Show (f Int), Functor f, Foldable f) => BoundEnv f -> String
 renderDot x =
   let g = boundEnvGraph x
-      s = AGED.defaultStyle (reprLookup x)
-  in AGED.export s g
+      s = AGED.defaultStyle reprBoundId
+      t = s { AGED.vertexAttributes = \a -> ["label" AGED.:= reprLookup x a] }
+  in AGED.export t g
 
 renderDoc :: (Show (f Int), Functor f, Foldable f) => BoundEnv f -> String
 renderDoc x =

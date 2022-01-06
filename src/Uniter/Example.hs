@@ -19,10 +19,11 @@ import Data.Text (Text)
 import Uniter.Align (Alignable (..), UnalignableError (..))
 import Uniter.Core (BoundId, Node (..), Unitable (..), uniterAddNode, uniterEmitEq, uniterFresh)
 import Uniter.FreeEnv (FreeEnv, FreeEnvMissingError (..), FreeName (..), emptyFreeEnv, insertFreeEnvM, lookupFreeEnvM)
-import Uniter.Graph (GraphState)
+import Uniter.Graph (GraphState (..))
 import Uniter.Halt (halt)
 import Uniter.Interface (RebindMap, initialGraph, processGraph)
 import Uniter.Process (ProcessError)
+import Uniter.Render (renderDot)
 
 data Exp =
     ExpConst
@@ -108,7 +109,7 @@ processGraphExp :: GraphState TyF -> Either (ProcessError UnalignableError) (Reb
 processGraphExp = processGraph
 
 writeDotExp :: FilePath -> GraphState TyF -> IO ()
-writeDotExp = writeDotExp
+writeDotExp p = writeFile p . renderDot . gsBoundEnv
 
 main :: IO ()
 main = do
