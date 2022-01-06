@@ -19,6 +19,7 @@ import Data.Foldable (for_)
 import Data.Functor (($>))
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
+import Data.These (These (..))
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Lens.Micro (Traversal', lens)
@@ -103,14 +104,19 @@ alignDefns da db =
     (DefnFresh, _) -> pure db
     (_, DefnFresh) -> pure da
     (DefnNode (Node na), DefnNode (Node nb)) -> do
-      case alignWith Duo na nb of
+      case align na nb of
         Left e -> halt e
         Right g -> do
-          h <- for g $ \duo -> do
-            root <- state (\x -> (x, succ x))
-            let item = Item duo root
-            tell (Seq.singleton item)
-            pure root
+          h <- for g $ \these -> do
+            case these of
+              This a -> pure a
+              That b -> pure b
+              These a b -> do
+                let duo = Duo a b
+                root <- state (\x -> (x, succ x))
+                let item = Item duo root
+                tell (Seq.singleton item)
+                pure root
           pure (DefnNode (Node h))
 
 alignMerge :: Alignable e f => BoundId -> UnionMergeMany Duo e (Defn f) (Seq Item, BoundId)

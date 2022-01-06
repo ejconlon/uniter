@@ -16,6 +16,7 @@ module Uniter.Example
 
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Text (Text)
+import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
 import Uniter.Align (Alignable (..), UnalignableError (..))
 import Uniter.Core (BoundId, Node (..), Unitable (..), uniterAddNode, uniterEmitEq, uniterFresh)
@@ -52,7 +53,7 @@ deriving stock instance Show a => Show (TyF a)
 
 instance Alignable UnalignableError TyF where
   align TyConstF TyConstF = Right TyConstF
-  align (TyPairF a b) (TyPairF c d) = Right (TyPairF (a, c) (b, d))
+  align (TyPairF a b) (TyPairF c d) = Right (TyPairF (These a c) (These b d))
   align _ _ = Left UnalignableError
 
 instance Unitable FreeEnv FreeEnvMissingError TyF ExpF where
