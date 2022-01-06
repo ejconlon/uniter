@@ -4,6 +4,7 @@ module Uniter.Align
   ) where
 
 import Control.Exception (Exception)
+import Data.Foldable (toList)
 import Data.These (These (..))
 import Data.Typeable (Typeable)
 
@@ -12,7 +13,6 @@ data UnalignableError = UnalignableError
 
 instance Exception UnalignableError
 
--- TODO use Semialign from semialign package
 class Traversable f => Alignable e f | f -> e where
   alignWith :: (These a b -> c) -> f a -> f b -> Either e (f c)
   alignWith f fa fb = fmap (fmap f) (align fa fb)
@@ -20,8 +20,8 @@ class Traversable f => Alignable e f | f -> e where
   align :: f a -> f b -> Either e (f (These a b))
   align = alignWith id
 
-  alignAll :: (These b a -> b) -> [f a] -> Either (Maybe e) (f b)
-  alignAll f = go (Left Nothing) where
+  alignAll :: Foldable t => (These z a -> z) -> t (f a) -> Either (Maybe e) (f z)
+  alignAll f = go (Left Nothing) . toList where
     go acc = \case
       [] -> acc
       fa:fas ->
