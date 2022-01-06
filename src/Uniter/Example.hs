@@ -16,6 +16,7 @@ module Uniter.Example
 
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Text (Text)
+import Text.Pretty.Simple (pPrint)
 import Uniter.Align (Alignable (..), UnalignableError (..))
 import Uniter.Core (BoundId, Node (..), Unitable (..), uniterAddNode, uniterEmitEq, uniterFresh)
 import Uniter.FreeEnv (FreeEnv, FreeEnvMissingError (..), FreeName (..), emptyFreeEnv, insertFreeEnvM, lookupFreeEnvM)
@@ -118,8 +119,12 @@ main = do
 
 process :: String -> Exp -> IO ()
 process n e = do
+  putStrLn n
   let (_, ig) = initialGraphExp e
+  pPrint ig
   writeDotExp ("dot/" ++ n ++ "-initial.dot") ig
   case processGraphExp ig of
     Left _ -> pure ()
-    Right (_, pg) -> writeDotExp ("dot/" ++ n ++ "-processed.dot") pg
+    Right (_, pg) -> do
+      pPrint pg
+      writeDotExp ("dot/" ++ n ++ "-processed.dot") pg

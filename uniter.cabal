@@ -83,6 +83,7 @@ library
     , microlens-mtl
     , mtl
     , overeasy
+    , pretty-simple
     , recursion-schemes
     , streaming
     , tasty
@@ -138,6 +139,7 @@ executable uniter-example
     , microlens-mtl
     , mtl
     , overeasy
+    , pretty-simple
     , recursion-schemes
     , streaming
     , tasty
@@ -195,6 +197,7 @@ test-suite uniter-test
     , microlens-mtl
     , mtl
     , overeasy
+    , pretty-simple
     , recursion-schemes
     , streaming
     , tasty

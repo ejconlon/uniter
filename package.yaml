@@ -24,6 +24,7 @@ dependencies:
 - microlens
 - microlens-mtl
 - mtl
+- pretty-simple
 - recursion-schemes
 - streaming
 - text

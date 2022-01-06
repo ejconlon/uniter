@@ -248,7 +248,7 @@ compactUnionMap u = foldl' go (ILM.empty, u) (toListUnionMap u) where
           case traceUnionMap k w of
             UnionMapTraceResMissing _ -> error "impossible"
             UnionMapTraceResFound r _ kacc ->
-              foldl' (\(m', w') j -> (ILM.insert j r m', UnionMap (ILM.insert j (UnionEntryLink r) (unUnionMap w')))) mw (safeTail kacc)
+              foldl' (\(m', w') j -> (ILM.insert j r m', UnionMap (ILM.insert j (UnionEntryLink r) (unUnionMap w')))) mw kacc
 
 compactUnionMapLM :: (Coercible k Int, MonadState s m) => UnionMapLens s k v -> m (IntLikeMap k k)
 compactUnionMapLM l = stateLens l compactUnionMap
