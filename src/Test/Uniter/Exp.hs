@@ -6,7 +6,7 @@ import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Text (Text)
 import Uniter.Align (Alignable (..), UnalignableError (..))
 import Uniter.Core (Node (..), Unitable (..), uniterAddNode, uniterEmitEq, uniterFresh)
-import Uniter.Env (FreeEnv, FreeEnvMissingError (..), FreeName (..), insertFreeEnvM, lookupFreeEnvM)
+import Uniter.FreeEnv (FreeEnv, FreeEnvMissingError (..), FreeName (..), insertFreeEnvM, lookupFreeEnvM)
 import Uniter.Halt (halt)
 
 data Exp =

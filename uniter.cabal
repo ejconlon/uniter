@@ -33,7 +33,7 @@ library
       Uniter
       Uniter.Align
       Uniter.Core
-      Uniter.Env
+      Uniter.FreeEnv
       Uniter.Graph
       Uniter.Halt
       Uniter.Process

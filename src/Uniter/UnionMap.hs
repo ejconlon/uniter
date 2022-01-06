@@ -9,7 +9,7 @@ module Uniter.UnionMap
   , foldUnionMergeMany
   , concatUnionMergeOne
   , concatUnionMergeMany
-  , UnionMap
+  , UnionMap (unUnionMap)
   , UnionMapLens
   , emptyUnionMap
   , sizeUnionMap
@@ -31,6 +31,12 @@ module Uniter.UnionMap
   , equivUnionMap
   , equivUnionMapLM
   , equivUnionMapM
+  , compactUnionMap
+  , compactUnionMapLM
+  , compactUnionMapM
+  , canonicalizeUnionMap
+  , canonicalizeUnionMapLM
+  , canonicalizeUnionMapM
   , UnionMapUpdateRes (..)
   , UnionMapUpdateVal (..)
   , updateUnionMap
@@ -52,19 +58,25 @@ import Data.Coerce (Coercible)
 import Data.Foldable (fold, foldl', toList)
 import Data.Maybe (fromMaybe)
 import GHC.Generics (Generic)
-import Lens.Micro (Lens')
+import Lens.Micro (Lens', Traversal', over)
 import Overeasy.IntLike.Map (IntLikeMap)
 import qualified Overeasy.IntLike.Map as ILM
 import Overeasy.IntLike.Set (IntLikeSet)
 import qualified Overeasy.IntLike.Set as ILS
 import Uniter.Halt (halt)
-import Uniter.State (mayStateLens, runIterM)
+import Uniter.State (mayStateLens, runDropM, stateLens)
 
 safeInit :: [a] -> [a]
 safeInit xs =
   case xs of
     [] -> xs
     _ -> init xs
+
+safeTail :: [a] -> [a]
+safeTail xs =
+  case xs of
+    [] -> xs
+    _:ys -> ys
 
 data Changed =
     ChangedYes
@@ -176,7 +188,7 @@ traceUnionMap k (UnionMap m) = go [] k where
       Nothing -> UnionMapTraceResMissing j
       Just link -> case link of
         UnionEntryLink kx -> go (j:acc) kx
-        UnionEntryValue v -> UnionMapTraceResFound j v (safeInit acc)
+        UnionEntryValue v -> UnionMapTraceResFound j v acc
 
 data UnionMapLookupRes k v =
     UnionMapLookupResMissing !k
@@ -187,7 +199,7 @@ lookupUnionMap :: Coercible k Int => k -> UnionMap k v -> UnionMapLookupRes k v
 lookupUnionMap k u = case traceUnionMap k u of
   UnionMapTraceResMissing kx -> UnionMapLookupResMissing kx
   UnionMapTraceResFound kr vr acc ->
-    let mu = if null acc then Nothing else Just (foldl' (\(UnionMap n) kx -> UnionMap (ILM.insert kx (UnionEntryLink kr) n)) u acc)
+    let mu = if null acc then Nothing else Just (foldl' (\(UnionMap n) kx -> UnionMap (ILM.insert kx (UnionEntryLink kr) n)) u (safeTail acc))
     in UnionMapLookupResFound kr vr mu
 
 data UnionMapLookupVal k v =
@@ -224,6 +236,39 @@ equivUnionMapLM l = mayStateLens l equivUnionMap
 
 equivUnionMapM :: (Coercible k Int, MonadState (UnionMap k v) m) => m (IntLikeMap k (IntLikeSet k), IntLikeMap k k)
 equivUnionMapM = equivUnionMapLM id
+
+compactUnionMap :: Coercible k Int => UnionMap k v -> (IntLikeMap k k, UnionMap k v)
+compactUnionMap u = foldl' go (ILM.empty, u) (toListUnionMap u) where
+  go mw@(m, w) (k, ue) =
+    if ILM.member k m
+      then mw
+      else case ue of
+        UnionEntryValue _ -> mw
+        UnionEntryLink _ ->
+          case traceUnionMap k w of
+            UnionMapTraceResMissing _ -> error "impossible"
+            UnionMapTraceResFound r _ kacc ->
+              foldl' (\(m', w') j -> (ILM.insert j r m', UnionMap (ILM.insert j (UnionEntryLink r) (unUnionMap w')))) mw (safeTail kacc)
+
+compactUnionMapLM :: (Coercible k Int, MonadState s m) => UnionMapLens s k v -> m (IntLikeMap k k)
+compactUnionMapLM l = stateLens l compactUnionMap
+
+compactUnionMapM :: (Coercible k Int, MonadState (UnionMap k v) m) => m (IntLikeMap k k)
+compactUnionMapM = compactUnionMapLM id
+
+canonicalizeUnionMap :: (Coercible k Int) => Traversal' v k -> UnionMap k v -> (IntLikeMap k k, UnionMap k v)
+canonicalizeUnionMap t u = res where
+  res = let (m, w) = compactUnionMap u in (m, UnionMap (ILM.fromList (toListUnionMap w >>= go m)))
+  go m (k, ue) =
+    case ue of
+      UnionEntryLink _ -> []
+      UnionEntryValue fk -> [(k, UnionEntryValue (over t (\j -> ILM.findWithDefault j j m) fk))]
+
+canonicalizeUnionMapLM :: (Coercible k Int, MonadState s m) => UnionMapLens s k v -> Traversal' v k -> m (IntLikeMap k k)
+canonicalizeUnionMapLM l t = stateLens l (canonicalizeUnionMap t)
+
+canonicalizeUnionMapM :: (Coercible k Int, MonadState (UnionMap k v) m) => Traversal' v k -> m (IntLikeMap k k)
+canonicalizeUnionMapM = canonicalizeUnionMapLM id
 
 data UnionMapUpdateRes e k v r =
     UnionMapUpdateResMissing !k
@@ -275,7 +320,7 @@ data UnionMapMergeRes e k v r =
 
 mergeOneUnionMap :: (Coercible k Int, Eq k) => UnionMergeOne e v r -> k -> k -> UnionMap k v -> UnionMapMergeRes e k v r
 mergeOneUnionMap g k j u = goLookupK where
-  doCompactCheck kr jr w jacc = doCompact kr w (if kr == jr then jacc else jr:jacc)
+  doCompactCheck kr jr w jacc = doCompact kr w (if kr == jr then safeTail jacc else jr:jacc)
   doCompact kr w acc = UnionMap (foldl' (\m x -> ILM.insert x (UnionEntryLink kr) m) (unUnionMap w) acc)
   doRoot kr gv w = UnionMap (ILM.insert kr (UnionEntryValue gv) (unUnionMap w))
   goLookupK = case lookupUnionMap k u of
@@ -312,7 +357,7 @@ mergeOneUnionMapM = mergeOneUnionMapLM id
 
 mergeManyUnionMap :: (Traversable f, Coercible k Int, Eq k) => UnionMergeMany f e v r -> k -> f k -> UnionMap k v -> UnionMapMergeRes e k v r
 mergeManyUnionMap g k js u = goLookupK where
-  doCompactCheck kr jr w jacc = doCompact kr w (if kr == jr then jacc else jr:jacc)
+  doCompactCheck kr jr w jacc = doCompact kr w (if kr == jr then safeTail jacc else jr:jacc)
   doCompact kr w acc = UnionMap (foldl' (\m x -> ILM.insert x (UnionEntryLink kr) m) (unUnionMap w) acc)
   doRoot kr gv w = UnionMap (ILM.insert kr (UnionEntryValue gv) (unUnionMap w))
   doTraceJ kr y = do
@@ -322,7 +367,7 @@ mergeManyUnionMap g k js u = goLookupK where
       UnionMapTraceResFound jr jv jacc -> do
         put (doCompactCheck kr jr w jacc)
         pure jv
-  doTraceJs kr w = runIterM (traverse (doTraceJ kr) js) w
+  doTraceJs kr w = runDropM (traverse (doTraceJ kr) js) w
   goLookupK = case lookupUnionMap k u of
     UnionMapLookupResMissing kx -> if k == kx then goAssign else UnionMapMergeResMissing kx
     UnionMapLookupResFound kr kv mw -> goLookupJs kr kv (fromMaybe u mw)

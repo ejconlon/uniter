@@ -4,9 +4,12 @@ module Uniter.Graph
   ( Elem (..)
   , BoundEnv (..)
   , emptyBoundEnv
+  , insertBoundEnv
+  , lookupBoundEnv
   , resolveVar
   , resolveNode
   , handleElems
+  , GraphState (..)
   , GraphM
   , graphResolveVar
   , graphResolveNode
@@ -24,9 +27,9 @@ import Control.Monad.Reader (MonadReader (..), ReaderT (runReaderT))
 import Control.Monad.State.Strict (MonadState (..), State, StateT (runStateT), gets, modify', runState)
 import Data.Foldable (traverse_)
 import Data.Functor.Foldable (Base, Corecursive (..), Recursive (..))
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
-import Uniter.Core (BoundId, EventHandler (..), EventStream, Node (..), UniterM, handleEvents, streamUniter)
+import Overeasy.IntLike.Map (IntLikeMap)
+import qualified Overeasy.IntLike.Map as ILM
+import Uniter.Core (BoundId (..), EventHandler (..), EventStream, Node (..), UniterM, handleEvents, streamUniter)
 import Uniter.Halt (MonadHalt (halt))
 
 data Elem f =
@@ -36,16 +39,22 @@ data Elem f =
 deriving stock instance Eq (f BoundId) => Eq (Elem f)
 deriving stock instance Show (f BoundId) => Show (Elem f)
 
-newtype BoundEnv f = BoundEnv { unBoundEnv :: Map BoundId (Elem f) }
+newtype BoundEnv f = BoundEnv { unBoundEnv :: IntLikeMap BoundId (Elem f) }
 deriving newtype instance Eq (f BoundId) => Eq (BoundEnv f)
 deriving stock instance Show (f BoundId) => Show (BoundEnv f)
 
 emptyBoundEnv :: BoundEnv f
-emptyBoundEnv = BoundEnv Map.empty
+emptyBoundEnv = BoundEnv ILM.empty
+
+insertBoundEnv :: BoundId -> Elem f -> BoundEnv f -> BoundEnv f
+insertBoundEnv x y = BoundEnv . ILM.insert x y . unBoundEnv
+
+lookupBoundEnv :: BoundId -> BoundEnv f -> Maybe (Elem f)
+lookupBoundEnv x = ILM.lookup x . unBoundEnv
 
 resolveVar :: (Corecursive t, Base t ~ f, Traversable f) => BoundId -> BoundEnv f -> Either BoundId t
 resolveVar v b@(BoundEnv m) =
-  case Map.lookup v m of
+  case ILM.lookup v m of
     Nothing -> Left v
     Just j ->
       case j of
@@ -56,7 +65,7 @@ resolveNode :: (Corecursive t, Base t ~ f, Traversable f) => Node f -> BoundEnv 
 resolveNode n b = fmap embed (traverse (`resolveVar` b) (unNode n))
 
 handleElems :: EventHandler e f m => BoundEnv f -> m ()
-handleElems = traverse_ go . Map.toList . unBoundEnv where
+handleElems = traverse_ go . ILM.toList . unBoundEnv where
   go (y, x) =
     case x of
       ElemNode n -> handleAddNode n y
@@ -67,6 +76,9 @@ data GraphState f = GraphState
   { gsUnique :: !BoundId
   , gsBoundEnv :: !(BoundEnv f)
   }
+
+newGraphState :: BoundId -> GraphState f
+newGraphState b = GraphState b emptyBoundEnv
 
 type GraphM f = State (GraphState f)
 
@@ -81,7 +93,7 @@ graphInsertTerm = cata (sequence >=> graphInsertNode . Node)
 
 graphInsertNode :: Node f -> GraphM f BoundId
 graphInsertNode n = state $ \(GraphState uniq (BoundEnv m)) ->
-  let m' = Map.insert uniq (ElemNode n) m
+  let m' = ILM.insert uniq (ElemNode n) m
   in (uniq, GraphState (succ uniq) (BoundEnv m'))
 
 newtype AppM v e f a = AppM { unAppM :: ReaderT v (StateT (GraphState f) (Except e)) a }
@@ -99,13 +111,13 @@ streamUniterA u = do
   uniq <- gets gsUnique
   pure (streamUniter u env uniq)
 
-modifyBoundEnvA :: (Map BoundId (Elem f) -> Map BoundId (Elem f)) -> AppM v e f ()
+modifyBoundEnvA :: (IntLikeMap BoundId (Elem f) -> IntLikeMap BoundId (Elem f)) -> AppM v e f ()
 modifyBoundEnvA f = modify' (\st -> st { gsBoundEnv = BoundEnv (f (unBoundEnv (gsBoundEnv st))) })
 
 instance EventHandler e f (AppM v e f) where
-  handleAddNode n i = modifyBoundEnvA (Map.insert i (ElemNode n))
-  handleEmitEq i j y = modifyBoundEnvA (Map.insert y (ElemEq i j))
-  handleFresh i = modifyBoundEnvA (Map.insert i ElemFresh)
+  handleAddNode n i = modifyBoundEnvA (ILM.insert i (ElemNode n))
+  handleEmitEq i j y = modifyBoundEnvA (ILM.insert y (ElemEq i j))
+  handleFresh i = modifyBoundEnvA (ILM.insert i ElemFresh)
 
 appUniter :: UniterM v e f a -> AppM v e f a
 appUniter u = do

@@ -1,12 +1,14 @@
 module Uniter.State
   ( mayStateLens
   , stateLens
-  , IterM
-  , runIterM
+  , DropM
+  , runDropM
+  , KeepM
+  , runKeepM
   ) where
 
-import Control.Monad.Except (Except, runExcept, throwError)
-import Control.Monad.State.Strict (MonadState, StateT, runStateT, state)
+import Control.Monad.Except (Except, ExceptT, runExcept, runExceptT, throwError)
+import Control.Monad.State.Strict (MonadState, State, StateT, runState, runStateT, state)
 import Lens.Micro (Lens', set)
 import Lens.Micro.Extras (view)
 import Uniter.Halt (MonadHalt (..))
@@ -28,11 +30,20 @@ stateLens l f = state $ \s ->
       s' = set l u' s
   in (a, s')
 
-newtype IterM e s a = IterM { unIterM :: StateT s (Except e) a }
+newtype DropM e s a = DropM { unDropM :: StateT s (Except e) a }
   deriving newtype (Functor, Applicative, Monad, MonadState s)
 
-runIterM :: IterM e s a -> s -> Either e (a, s)
-runIterM it s = runExcept (runStateT (unIterM it) s)
+instance MonadHalt e (DropM e s) where
+  halt = DropM . throwError
 
-instance MonadHalt e (IterM e s) where
-  halt = IterM . throwError
+runDropM :: DropM e s a -> s -> Either e (a, s)
+runDropM it s = runExcept (runStateT (unDropM it) s)
+
+newtype KeepM e s a = KeepM { unKeepM :: ExceptT e (State s) a }
+  deriving newtype (Functor, Applicative, Monad, MonadState s)
+
+instance MonadHalt e (KeepM e s) where
+  halt = KeepM . throwError
+
+runKeepM :: KeepM e s a -> s -> (Either e a, s)
+runKeepM it = runState (runExceptT (unKeepM it))

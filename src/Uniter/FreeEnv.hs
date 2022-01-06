@@ -1,4 +1,4 @@
-module Uniter.Env
+module Uniter.FreeEnv
   ( FreeName (..)
   , FreeEnv (..)
   , FreeEnvLens

@@ -3,10 +3,14 @@
 module Uniter.Process
   ( ProcessError (..)
   , Defn (..)
+  , defnTraversal
   , ProcessState (..)
   , newProcessState
   , ProcessM
   , runProcessM
+  , processCompact
+  , processCanonicalize
+  , processBoundEnv
   ) where
 
 import Control.Exception (Exception)
@@ -19,12 +23,16 @@ import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
-import Lens.Micro (lens)
+import Lens.Micro (Traversal', lens)
+import Overeasy.IntLike.Map (IntLikeMap)
 import Uniter.Align (Alignable (..))
 import Uniter.Core (BoundId (..), EventHandler (..), Node (..))
+import Uniter.Graph (BoundEnv (BoundEnv), Elem (ElemFresh, ElemNode))
 import Uniter.Halt (MonadHalt (halt))
-import Uniter.UnionMap (UnionMap, UnionMapAddVal (..), UnionMapLens, UnionMapLookupVal (..), UnionMapMergeVal (..),
-                        UnionMergeMany, addUnionMapLM, emptyUnionMap, lookupUnionMapLM, mergeManyUnionMapLM)
+import Uniter.State (KeepM, runKeepM)
+import Uniter.UnionMap (UnionEntry (..), UnionMap, UnionMapAddVal (..), UnionMapLens, UnionMapLookupVal (..),
+                        UnionMapMergeVal (..), UnionMergeMany, addUnionMapLM, canonicalizeUnionMapLM, compactUnionMapLM,
+                        emptyUnionMap, lookupUnionMapLM, mergeManyUnionMapLM, unUnionMap)
 
 data ProcessError e =
     ProcessErrorDuplicate !BoundId
@@ -40,6 +48,11 @@ data Defn f =
 deriving stock instance Eq (f BoundId) => Eq (Defn f)
 deriving stock instance Show (f BoundId) => Show (Defn f)
 
+defnTraversal :: Traversable f => Traversal' (Defn f) BoundId
+defnTraversal g = \case
+  DefnFresh -> pure DefnFresh
+  DefnNode (Node fb) -> fmap (DefnNode . Node) (traverse g fb)
+
 data ProcessState f = ProcessState
   { psUnique :: !BoundId
   , psUnionMap :: !(UnionMap BoundId (Defn f))
@@ -53,16 +66,31 @@ psUnionMapL = lens psUnionMap (\ps um -> ps { psUnionMap = um })
 newProcessState :: BoundId -> ProcessState f
 newProcessState uniq = ProcessState uniq emptyUnionMap
 
-newtype ProcessM e f a = ProcessM
-  { unProcessM :: StateT (ProcessState f) (Except (ProcessError e) ) a
-  } deriving newtype (Functor, Applicative, Monad, MonadState (ProcessState f))
+newtype ProcessM e f a = ProcessM { unProcessM :: KeepM (ProcessError e) (ProcessState f) a }
+  deriving newtype (Functor, Applicative, Monad, MonadState (ProcessState f), MonadHalt (ProcessError e))
 
-instance MonadHalt (ProcessError e) (ProcessM e f) where
-  halt = ProcessM . throwError
+runProcessM :: ProcessM e f a -> ProcessState f -> (Either (ProcessError e) a, ProcessState f)
+runProcessM = runKeepM . unProcessM
 
--- TODO flip exceptt and statet to get state on error
-runProcessM :: ProcessM e f a -> ProcessState f -> Either (ProcessError e) (a, ProcessState f)
-runProcessM p = runExcept . runStateT (unProcessM p)
+processCompact :: ProcessM e f (IntLikeMap BoundId BoundId)
+processCompact = compactUnionMapLM psUnionMapL
+
+processCanonicalize :: Traversable f => ProcessM e f (IntLikeMap BoundId BoundId)
+processCanonicalize = canonicalizeUnionMapLM psUnionMapL defnTraversal
+
+processBoundEnv :: Traversable f => ProcessM e f (IntLikeMap BoundId BoundId, BoundEnv f)
+processBoundEnv = res where
+  res = do
+    m <- processCanonicalize
+    v <- gets (go1 . psUnionMap)
+    pure (m, v)
+  go1 = BoundEnv . fmap go2 . unUnionMap
+  go2 = \case
+    UnionEntryLink _ -> error "impossible"
+    UnionEntryValue d ->
+      case d of
+        DefnFresh -> ElemFresh
+        DefnNode n -> ElemNode n
 
 -- TODO can remove this because the checks happen inline
 -- guardNewP :: BoundId -> ProcessM e f ()
