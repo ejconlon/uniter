@@ -17,6 +17,7 @@ dependencies:
 - base >= 4.12 && < 5
 # TODO split out int-like
 - overeasy
+- algebraic-graphs >= 0.6
 - containers
 - deepseq
 - hashable
@@ -26,6 +27,7 @@ dependencies:
 - recursion-schemes
 - streaming
 - text
+- these
 - transformers
 # TODO remove test deps
 - hedgehog
@@ -75,6 +77,17 @@ ghc-options:
 
 library:
   source-dirs: src
+
+executables:
+  uniter-example:
+    main:                Main.hs
+    source-dirs:         example
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - uniter
 
 tests:
   uniter-test:

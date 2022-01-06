@@ -5,12 +5,10 @@ module Uniter.Process
   , Defn (..)
   , defnTraversal
   , ProcessState (..)
+  , psUnionMapL
   , newProcessState
   , ProcessM
   , runProcessM
-  , processCompact
-  , processCanonicalize
-  , processBoundEnv
   ) where
 
 import Control.Exception (Exception)
@@ -24,15 +22,12 @@ import qualified Data.Sequence as Seq
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Lens.Micro (Traversal', lens)
-import Overeasy.IntLike.Map (IntLikeMap)
 import Uniter.Align (Alignable (..))
 import Uniter.Core (BoundId (..), EventHandler (..), Node (..))
-import Uniter.Graph (BoundEnv (BoundEnv), Elem (ElemFresh, ElemNode))
 import Uniter.Halt (MonadHalt (halt))
 import Uniter.State (KeepM, runKeepM)
-import Uniter.UnionMap (UnionEntry (..), UnionMap, UnionMapAddVal (..), UnionMapLens, UnionMapLookupVal (..),
-                        UnionMapMergeVal (..), UnionMergeMany, addUnionMapLM, canonicalizeUnionMapLM, compactUnionMapLM,
-                        emptyUnionMap, lookupUnionMapLM, mergeManyUnionMapLM, unUnionMap)
+import Uniter.UnionMap (UnionMap, UnionMapAddVal (..), UnionMapLens, UnionMapLookupVal (..), UnionMapMergeVal (..),
+                        UnionMergeMany, addUnionMapLM, emptyUnionMap, lookupUnionMapLM, mergeManyUnionMapLM)
 
 data ProcessError e =
     ProcessErrorDuplicate !BoundId
@@ -71,26 +66,6 @@ newtype ProcessM e f a = ProcessM { unProcessM :: KeepM (ProcessError e) (Proces
 
 runProcessM :: ProcessM e f a -> ProcessState f -> (Either (ProcessError e) a, ProcessState f)
 runProcessM = runKeepM . unProcessM
-
-processCompact :: ProcessM e f (IntLikeMap BoundId BoundId)
-processCompact = compactUnionMapLM psUnionMapL
-
-processCanonicalize :: Traversable f => ProcessM e f (IntLikeMap BoundId BoundId)
-processCanonicalize = canonicalizeUnionMapLM psUnionMapL defnTraversal
-
-processBoundEnv :: Traversable f => ProcessM e f (IntLikeMap BoundId BoundId, BoundEnv f)
-processBoundEnv = res where
-  res = do
-    m <- processCanonicalize
-    v <- gets (go1 . psUnionMap)
-    pure (m, v)
-  go1 = BoundEnv . fmap go2 . unUnionMap
-  go2 = \case
-    UnionEntryLink _ -> error "impossible"
-    UnionEntryValue d ->
-      case d of
-        DefnFresh -> ElemFresh
-        DefnNode n -> ElemNode n
 
 -- TODO can remove this because the checks happen inline
 -- guardNewP :: BoundId -> ProcessM e f ()

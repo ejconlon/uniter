@@ -98,13 +98,13 @@ subInterpESM v = \case
       UniterAsk k -> subInterpESM v (k v)
       UniterLocal f act -> interpESM (f v) act >>= subInterpESM v
       UniterEmitEq i j k -> state (\b -> (b, succ b)) >>= \y -> S.wrap (EventEmitEq i j y (subInterpESM v (k y)))
-      UniterAddNode n k -> state (\b -> (b, succ b)) >>= \i -> S.wrap (EventAddNode n i (subInterpESM v (k i)))
-      UniterFresh k -> state (\b -> (b, succ b)) >>= \i -> S.wrap (EventFresh i (subInterpESM v (k i)))
+      UniterAddNode n k -> state (\b -> (b, succ b)) >>= \y -> S.wrap (EventAddNode n y (subInterpESM v (k y)))
+      UniterFresh k -> state (\b -> (b, succ b)) >>= \y -> S.wrap (EventFresh y (subInterpESM v (k y)))
 
 streamUniter :: UniterM v e f r -> v -> BoundId -> EventStream e f (r, BoundId)
 streamUniter u v bid = S.hoist (\x -> Identity (fst (runE x v bid))) (interpESM v u >>= \r -> get >>= \bid' -> pure (r, bid'))
 
-class Unitable v e g f where
+class Unitable v e g f | f -> v e g where
   unite :: f (UniterM v e g BoundId) -> UniterM v e g BoundId
 
 uniteTerm :: (Recursive t, Base t ~ f, Unitable v e g f) => t -> UniterM v e g BoundId

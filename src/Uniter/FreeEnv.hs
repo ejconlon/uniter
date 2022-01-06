@@ -3,6 +3,7 @@ module Uniter.FreeEnv
   , FreeEnv (..)
   , FreeEnvLens
   , emptyFreeEnv
+  , toListFreeEnv
   , insertFreeEnv
   , insertFreeEnvLM
   , insertFreeEnvM
@@ -37,6 +38,9 @@ type FreeEnvLens s = Lens' s FreeEnv
 
 emptyFreeEnv :: FreeEnv
 emptyFreeEnv = FreeEnv Map.empty
+
+toListFreeEnv :: FreeEnv -> [(FreeName, BoundId)]
+toListFreeEnv = Map.toList . unFreeEnv
 
 insertFreeEnv :: FreeName -> BoundId -> FreeEnv -> FreeEnv
 insertFreeEnv a b (FreeEnv m) = FreeEnv (Map.insert a b m)

@@ -15,6 +15,13 @@ packages:
   original:
     git: git@github.com:ejconlon/overeasy.git
     commit: 7682ce906a3a446156e274c507e746978e076d0e
+- completed:
+    hackage: algebraic-graphs-0.6@sha256:9b05e54b351a5141bc8fe46c095095627c34defc8375aa531a4753091a81f138,8755
+    pantry-tree:
+      size: 4201
+      sha256: 1d22c40b256485ae3ca4ba23606bba2ef0d1b5fd759f9dcdf0e501b0c83f1959
+  original:
+    hackage: algebraic-graphs-0.6
 snapshots:
 - completed:
     size: 586296
