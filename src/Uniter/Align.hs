@@ -4,9 +4,7 @@ module Uniter.Align
   ) where
 
 import Control.Exception (Exception)
-import Data.Sequence (Seq (..))
-import qualified Data.Sequence as Seq
-import Data.These (These (..), mergeThese)
+import Data.These (These (..))
 import Data.Typeable (Typeable)
 
 data UnalignableError = UnalignableError
