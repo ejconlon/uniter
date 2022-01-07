@@ -2,7 +2,7 @@
 
 module Uniter.Core
   ( BoundId (..)
-  , Node (..)
+  , Node
   , UniterM
   , uniterEmitEq
   , uniterAddNode
@@ -32,9 +32,7 @@ newtype BoundId = BoundId { unBoundId :: Int }
   deriving stock (Show)
   deriving newtype (Eq, Ord, Hashable, Enum, NFData)
 
-newtype Node f = Node { unNode :: f BoundId }
-deriving newtype instance Eq (f BoundId) => Eq (Node f)
-deriving stock instance Show (f BoundId) => Show (Node f)
+type Node f = f BoundId
 
 data UniterF v e f m a =
     UniterHalt !e

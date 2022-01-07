@@ -19,7 +19,7 @@ import Data.Text (Text)
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
 import Uniter.Align (Alignable (..), UnalignableError (..))
-import Uniter.Core (BoundId, Node (..), Unitable (..), uniterAddNode, uniterEmitEq, uniterFresh)
+import Uniter.Core (BoundId, Unitable (..), uniterAddNode, uniterEmitEq, uniterFresh)
 import Uniter.FreeEnv (FreeEnv, FreeEnvMissingError (..), FreeName (..), emptyFreeEnv, insertFreeEnvM, lookupFreeEnvM)
 import Uniter.Graph (GraphState (..))
 import Uniter.Halt (halt)
@@ -58,7 +58,7 @@ instance Alignable UnalignableError TyF where
 
 instance Unitable FreeEnv FreeEnvMissingError TyF ExpF where
   unite = \case
-    ExpConstF -> uniterAddNode (Node TyConstF)
+    ExpConstF -> uniterAddNode TyConstF
     ExpUseBindF n -> do
       b <- lookupFreeEnvM (FreeName n)
       maybe (halt (FreeEnvMissingError (FreeName n))) pure b
@@ -68,18 +68,18 @@ instance Unitable FreeEnv FreeEnvMissingError TyF ExpF where
     ExpTupleF mx my -> do
       x <- mx
       y <- my
-      uniterAddNode (Node (TyPairF x y))
+      uniterAddNode (TyPairF x y)
     ExpFirstF mx -> do
       x <- mx
       v <- uniterFresh
       w <- uniterFresh
-      y <- uniterAddNode (Node (TyPairF v w))
+      y <- uniterAddNode (TyPairF v w)
       uniterEmitEq x y
     ExpSecondF mx -> do
       x <- mx
       v <- uniterFresh
       w <- uniterFresh
-      y <- uniterAddNode (Node (TyPairF v w))
+      y <- uniterAddNode (TyPairF v w)
       uniterEmitEq x y
 
 exampleLinear :: Exp

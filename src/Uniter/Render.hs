@@ -11,7 +11,7 @@ import Algebra.Graph (Graph, edge, vertex)
 import qualified Algebra.Graph.Export as AGE
 import qualified Algebra.Graph.Export.Dot as AGED
 import Data.Foldable (toList)
-import Uniter.Core (BoundId (..), Node (..))
+import Uniter.Core (BoundId (..))
 import Uniter.Graph (BoundEnv, Elem (..), lookupBoundEnv, toListBoundEnv)
 
 reprBoundId :: BoundId -> String
@@ -19,13 +19,13 @@ reprBoundId = show . unBoundId
 
 reprElem :: (Show (f Int), Functor f) => Elem f -> String
 reprElem = \case
-  ElemNode (Node n) -> unwords ["Node", show (fmap unBoundId n)]
+  ElemNode n -> unwords ["Node", show (fmap unBoundId n)]
   ElemEq x y -> unwords ["Eq", reprBoundId x, reprBoundId y]
   ElemFresh -> "Fresh"
 
 elemChildren :: Foldable f => Elem f -> [BoundId]
 elemChildren = \case
-  ElemNode (Node z) -> toList z
+  ElemNode z -> toList z
   ElemEq x y -> [x, y]
   ElemFresh -> []
 

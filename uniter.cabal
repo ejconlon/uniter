@@ -26,7 +26,6 @@ library
   exposed-modules:
       Test.Uniter.Assertions
       Test.Uniter.Main
-      Test.Uniter.Scratch
       Test.Uniter.State
       Uniter
       Uniter.Align

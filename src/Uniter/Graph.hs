@@ -32,7 +32,7 @@ import Data.Functor.Foldable (Base, Corecursive (..), Recursive (..))
 import Overeasy.IntLike.Map (IntLikeMap)
 import qualified Overeasy.IntLike.Map as ILM
 import qualified Streaming as S
-import Uniter.Core (BoundId (..), EventF (..), EventHandler (..), EventStream, Node (..), UniterM, handleEvents,
+import Uniter.Core (BoundId (..), EventF (..), EventHandler (..), EventStream, Node, UniterM, handleEvents,
                     streamUniter)
 import Uniter.Halt (MonadHalt)
 import Uniter.State (KeepM, runKeepM)
@@ -79,7 +79,7 @@ resolveVar v b@(BoundEnv m) =
         _ -> Left v
 
 resolveNode :: (Corecursive t, Base t ~ f, Traversable f) => Node f -> BoundEnv f -> Either BoundId t
-resolveNode n b = fmap embed (traverse (`resolveVar` b) (unNode n))
+resolveNode n b = fmap embed (traverse (`resolveVar` b) n)
 
 handleElems :: EventHandler e f m => BoundEnv f -> m ()
 handleElems = traverse_ go . ILM.toList . unBoundEnv where
@@ -108,7 +108,7 @@ graphResolveNode :: (Corecursive t, Base t ~ f, Traversable f) => Node f -> Grap
 graphResolveNode n = fmap (resolveNode n) (gets gsBoundEnv)
 
 graphInsertTerm :: (Recursive t, Base t ~ f, Traversable f) => t -> GraphM f BoundId
-graphInsertTerm = cata (sequence >=> graphInsertNode . Node)
+graphInsertTerm = cata (sequence >=> graphInsertNode)
 
 graphInsertNode :: Node f -> GraphM f BoundId
 graphInsertNode n = state $ \(GraphState uniq (BoundEnv m)) ->

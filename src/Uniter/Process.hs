@@ -24,7 +24,7 @@ import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import Lens.Micro (Traversal', lens)
 import Uniter.Align (Alignable (..))
-import Uniter.Core (BoundId (..), EventHandler (..), Node (..))
+import Uniter.Core (BoundId (..), EventHandler (..), Node)
 import Uniter.Halt (MonadHalt (halt))
 import Uniter.State (KeepM, runKeepM)
 import Uniter.UnionMap (UnionMap, UnionMapAddVal (..), UnionMapLens, UnionMapLookupVal (..), UnionMapMergeVal (..),
@@ -47,7 +47,7 @@ deriving stock instance Show (f BoundId) => Show (Defn f)
 defnTraversal :: Traversable f => Traversal' (Defn f) BoundId
 defnTraversal g = \case
   DefnFresh -> pure DefnFresh
-  DefnNode (Node fb) -> fmap (DefnNode . Node) (traverse g fb)
+  DefnNode fb -> fmap DefnNode (traverse g fb)
 
 data ProcessState f = ProcessState
   { psUnique :: !BoundId
@@ -103,7 +103,7 @@ alignDefns da db =
   case (da, db) of
     (DefnFresh, _) -> pure db
     (_, DefnFresh) -> pure da
-    (DefnNode (Node na), DefnNode (Node nb)) -> do
+    (DefnNode na, DefnNode nb) -> do
       case align na nb of
         Left e -> halt e
         Right g -> do
@@ -117,7 +117,7 @@ alignDefns da db =
                 let item = Item duo root
                 tell (Seq.singleton item)
                 pure root
-          pure (DefnNode (Node h))
+          pure (DefnNode h)
 
 alignMerge :: Alignable e f => BoundId -> UnionMergeMany Duo e (Defn f) (Seq Item, BoundId)
 alignMerge b mdx (Duo di dj) = res where
