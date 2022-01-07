@@ -11,9 +11,10 @@ import qualified Overeasy.IntLike.Set as ILS
 import Test.Tasty (TestTree, defaultMain, testGroup)
 import Test.Uniter.Assertions (testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
-import Uniter.UnionMap (Changed (..), UnionMap, UnionMapAddVal (..), UnionMapLookupVal (..), UnionMapMergeVal (..),
-                        UnionMapTraceRes (..), UnionMergeOne, addUnionMapM, concatUnionMergeOne, emptyUnionMap,
-                        equivUnionMapM, lookupUnionMapM, mergeOneUnionMapM, sizeUnionMap, traceUnionMap, valuesUnionMap)
+import Uniter.UnionMap (Changed (..), UnionEquiv (..), UnionMap, UnionMapAddVal (..), UnionMapLookupVal (..),
+                        UnionMapMergeVal (..), UnionMapTraceRes (..), UnionMergeOne, addUnionMapM, concatUnionMergeOne,
+                        emptyUnionMap, equivUnionMapM, lookupUnionMapM, mergeOneUnionMapM, sizeUnionMap, traceUnionMap,
+                        valuesUnionMap)
 
 newtype V = V { unV :: Int }
   deriving newtype (Eq)
@@ -70,7 +71,7 @@ testUmSimple = testUnit "UM simple" $ runS emptyUMV $ do
     traceUnionMap (toV 'b') um === UnionMapTraceResFound (toV 'b') 2 []
     traceUnionMap (toV 'c') um === UnionMapTraceResFound (toV 'c') 3 []
     valuesUnionMap um === mapV [('a', 1), ('b', 2), ('c', 3)]
-  applyTestS equivUnionMapM $ \(fwd, bwd) _ -> do
+  applyTestS equivUnionMapM $ \(UnionEquiv fwd bwd) _ -> do
     fwd === multiMapVV [('a', ""), ('b', ""), ('c', "")]
     bwd === mapVV []
   -- merge 'a' and 'c'
@@ -81,7 +82,7 @@ testUmSimple = testUnit "UM simple" $ runS emptyUMV $ do
     traceUnionMap (toV 'b') um === UnionMapTraceResFound (toV 'b') 2 []
     traceUnionMap (toV 'c') um === UnionMapTraceResFound (toV 'a') 3 [toV 'c']
     valuesUnionMap um === mapV [('a', 3), ('b', 2)]
-  applyTestS equivUnionMapM $ \(fwd, bwd) _ -> do
+  applyTestS equivUnionMapM $ \(UnionEquiv fwd bwd) _ -> do
     fwd === multiMapVV [('a', "c"), ('b', "")]
     bwd === mapVV [('c', 'a')]
   -- try to merge again
@@ -96,7 +97,7 @@ testUmSimple = testUnit "UM simple" $ runS emptyUMV $ do
   -- and creating merge
   applyTestS (mergeOneUnionMapM mergeOneUMV (toV 'z') (toV 'b')) $ \res _ ->
     res === UnionMapMergeValMerged (toV 'z') 2 ()
-  applyTestS equivUnionMapM $ \(fwd, bwd) _ -> do
+  applyTestS equivUnionMapM $ \(UnionEquiv fwd bwd) _ -> do
     fwd === multiMapVV [('a', "c"), ('z', "b")]
     bwd === mapVV [('b', 'z'), ('c', 'a')]
 
@@ -113,7 +114,7 @@ testUmRec = testUnit "UM rec" $ runS emptyUMV $ do
     traceUnionMap (toV 'b') um === UnionMapTraceResFound (toV 'b') 3 []
     traceUnionMap (toV 'c') um === UnionMapTraceResFound (toV 'b') 3 [toV 'c']
     valuesUnionMap um === mapV [('a', 1), ('b', 3)]
-  applyTestS equivUnionMapM $ \(fwd, bwd) _ -> do
+  applyTestS equivUnionMapM $ \(UnionEquiv fwd bwd) _ -> do
     fwd === multiMapVV [('a', ""), ('b', "c")]
     bwd === mapVV [('c', 'b')]
   applyTestS (mergeOneUnionMapM mergeOneUMV (toV 'a') (toV 'b')) $ \res um -> do
@@ -123,7 +124,7 @@ testUmRec = testUnit "UM rec" $ runS emptyUMV $ do
     traceUnionMap (toV 'b') um === UnionMapTraceResFound (toV 'a') 3 [toV 'b']
     traceUnionMap (toV 'c') um === UnionMapTraceResFound (toV 'a') 3 [toV 'b', toV 'c']
     valuesUnionMap um === mapV [('a', 3)]
-  applyTestS equivUnionMapM $ \(fwd, bwd) _ -> do
+  applyTestS equivUnionMapM $ \(UnionEquiv fwd bwd) _ -> do
     fwd === multiMapVV [('a', "bc")]
     bwd === mapVV [('b', 'a'), ('c', 'a')]
 
@@ -140,7 +141,7 @@ testUmTail = testUnit "UM rec" $ runS emptyUMV $ do
     pure ()
   testS $ \um ->
     traceUnionMap (toV 'd') um === UnionMapTraceResFound (toV 'a') 4 [toV 'b', toV 'c', toV 'd']
-  applyTestS equivUnionMapM $ \(fwd, bwd) _ -> do
+  applyTestS equivUnionMapM $ \(UnionEquiv fwd bwd) _ -> do
     fwd === multiMapVV [('a', "bcd")]
     bwd === mapVV [('b', 'a'), ('c', 'a'), ('d', 'a')]
   testS $ \um ->

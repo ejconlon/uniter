@@ -1,6 +1,8 @@
 module Uniter.UnionMap
   ( Changed (..)
   , maybeChanged
+  , UnionEquiv (..)
+  , emptyUnionEquiv
   , UnionEntry (..)
   , UnionMergeOne
   , UnionMergeMany
@@ -66,11 +68,11 @@ import qualified Overeasy.IntLike.Set as ILS
 import Uniter.Halt (halt)
 import Uniter.State (mayStateLens, runDropM, stateLens)
 
-safeInit :: [a] -> [a]
-safeInit xs =
-  case xs of
-    [] -> xs
-    _ -> init xs
+-- safeInit :: [a] -> [a]
+-- safeInit xs =
+--   case xs of
+--     [] -> xs
+--     _ -> init xs
 
 safeTail :: [a] -> [a]
 safeTail xs =
@@ -87,6 +89,14 @@ maybeChanged :: Maybe a -> Changed
 maybeChanged = \case
   Nothing -> ChangedNo
   Just _ -> ChangedYes
+
+data UnionEquiv k = UnionEquiv
+  { ueFwd :: !(IntLikeMap k (IntLikeSet k))
+  , ueBwd :: !(IntLikeMap k k)
+  } deriving stock (Eq, Show)
+
+emptyUnionEquiv :: UnionEquiv k
+emptyUnionEquiv = UnionEquiv ILM.empty ILM.empty
 
 data UnionEntry k v =
     UnionEntryLink !k
@@ -216,25 +226,25 @@ lookupUnionMapLM l k = mayStateLens l $ \u ->
 lookupUnionMapM :: (Coercible k Int, MonadState (UnionMap k v) m) => k -> m (UnionMapLookupVal k v)
 lookupUnionMapM = lookupUnionMapLM id
 
-equivUnionMap :: Coercible k Int => UnionMap k v -> ((IntLikeMap k (IntLikeSet k), IntLikeMap k k), Maybe (UnionMap k v))
-equivUnionMap u = foldl' go ((ILM.empty, ILM.empty), Nothing) (toListUnionMap u) where
-  go ((fwd, bwd), mw) (k, ue) =
+equivUnionMap :: Coercible k Int => UnionMap k v -> (UnionEquiv k, Maybe (UnionMap k v))
+equivUnionMap u = foldl' go (emptyUnionEquiv, Nothing) (toListUnionMap u) where
+  go (UnionEquiv fwd bwd, mw) (k, ue) =
     case ue of
       UnionEntryValue _ ->
         let fwd' = ILM.alter (Just . fromMaybe ILS.empty) k fwd
-        in ((fwd', bwd), mw)
+        in (UnionEquiv fwd' bwd, mw)
       UnionEntryLink _ ->
         case lookupUnionMap k (fromMaybe u mw) of
           UnionMapLookupResMissing _ -> error "impossible"
           UnionMapLookupResFound r _ mw' ->
             let fwd' = ILM.alter (Just . maybe (ILS.singleton k) (ILS.insert k)) r fwd
                 bwd' = ILM.insert k r bwd
-            in ((fwd', bwd'), mw')
+            in (UnionEquiv fwd' bwd', mw')
 
-equivUnionMapLM :: (Coercible k Int, MonadState s m) => UnionMapLens s k v -> m (IntLikeMap k (IntLikeSet k), IntLikeMap k k)
+equivUnionMapLM :: (Coercible k Int, MonadState s m) => UnionMapLens s k v -> m (UnionEquiv k)
 equivUnionMapLM l = mayStateLens l equivUnionMap
 
-equivUnionMapM :: (Coercible k Int, MonadState (UnionMap k v) m) => m (IntLikeMap k (IntLikeSet k), IntLikeMap k k)
+equivUnionMapM :: (Coercible k Int, MonadState (UnionMap k v) m) => m (UnionEquiv k)
 equivUnionMapM = equivUnionMapLM id
 
 compactUnionMap :: Coercible k Int => UnionMap k v -> (IntLikeMap k k, UnionMap k v)
