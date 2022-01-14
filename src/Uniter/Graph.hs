@@ -29,8 +29,8 @@ import Control.Monad.Reader (MonadReader (..), ReaderT (runReaderT))
 import Control.Monad.State.Strict (MonadState (..), State, gets, modify', runState)
 import Data.Foldable (traverse_)
 import Data.Functor.Foldable (Base, Corecursive (..), Recursive (..))
-import Overeasy.IntLike.Map (IntLikeMap)
-import qualified Overeasy.IntLike.Map as ILM
+import IntLike.Map (IntLikeMap)
+import qualified IntLike.Map as ILM
 import qualified Streaming as S
 import Uniter.Core (BoundId (..), EventF (..), EventHandler (..), EventStream, Node, UniterM, handleEvents,
                     streamUniter)

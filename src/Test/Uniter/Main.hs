@@ -4,12 +4,11 @@ import Data.Bifunctor (bimap, first)
 import Data.Char (chr, ord)
 import Data.Semigroup (Max)
 import Data.Void (Void)
-import Overeasy.IntLike.Map (IntLikeMap)
-import qualified Overeasy.IntLike.Map as ILM
-import Overeasy.IntLike.Set (IntLikeSet)
-import qualified Overeasy.IntLike.Set as ILS
-import Test.Tasty (TestTree, defaultMain, testGroup)
-import Test.Uniter.Assertions (testUnit, (===))
+import IntLike.Map (IntLikeMap)
+import qualified IntLike.Map as ILM
+import IntLike.Set (IntLikeSet)
+import qualified IntLike.Set as ILS
+import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
 import Uniter.UnionMap (Changed (..), UnionEquiv (..), UnionMap, UnionMapAddVal (..), UnionMapLookupVal (..),
                         UnionMapMergeVal (..), UnionMapTraceRes (..), UnionMergeOne, addUnionMapM, concatUnionMergeOne,
@@ -155,6 +154,6 @@ testUmUnit = testGroup "UM unit"
   ]
 
 main :: IO ()
-main = defaultMain $ testGroup "Uniter"
+main = testMain $ \_ -> testGroup "Uniter"
   [ testUmUnit
   ]

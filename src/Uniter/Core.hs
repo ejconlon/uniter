@@ -23,9 +23,9 @@ import Control.Monad.Reader (MonadReader (..), ReaderT (..))
 import Control.Monad.State.Strict (MonadState (..), State, runState)
 import Data.Functor.Foldable (Base, Recursive (cata))
 import Data.Hashable (Hashable)
-import Overeasy.Expressions.Free (Free, pattern FreeEmbed, pattern FreePure)
 import Streaming (Stream)
 import qualified Streaming as S
+import Unfree (Free, pattern FreeEmbed, pattern FreePure)
 import Uniter.Halt (MonadHalt (..))
 
 newtype BoundId = BoundId { unBoundId :: Int }

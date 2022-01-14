@@ -7,7 +7,7 @@ module Uniter.Interface
 
 import Control.Monad.Trans.State.Strict (runState)
 import Data.Functor.Foldable (Base, Recursive)
-import Overeasy.IntLike.Map (IntLikeMap)
+import IntLike.Map (IntLikeMap)
 import Uniter.Align (Alignable)
 import Uniter.Core (BoundId (..), Unitable, handleEvents, uniteTerm)
 import Uniter.Graph (BoundEnv (..), Elem (..), GraphState (..), appUniter, newGraphState, runAppM, streamBoundEnv)

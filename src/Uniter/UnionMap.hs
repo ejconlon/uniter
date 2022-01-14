@@ -60,19 +60,13 @@ import Data.Coerce (Coercible)
 import Data.Foldable (fold, foldl', toList)
 import Data.Maybe (fromMaybe)
 import GHC.Generics (Generic)
+import IntLike.Map (IntLikeMap)
+import qualified IntLike.Map as ILM
+import IntLike.Set (IntLikeSet)
+import qualified IntLike.Set as ILS
 import Lens.Micro (Lens', Traversal', over)
-import Overeasy.IntLike.Map (IntLikeMap)
-import qualified Overeasy.IntLike.Map as ILM
-import Overeasy.IntLike.Set (IntLikeSet)
-import qualified Overeasy.IntLike.Set as ILS
 import Uniter.Halt (halt)
 import Uniter.State (mayStateLens, runDropM, stateLens)
-
--- safeInit :: [a] -> [a]
--- safeInit xs =
---   case xs of
---     [] -> xs
---     _ -> init xs
 
 safeTail :: [a] -> [a]
 safeTail xs =

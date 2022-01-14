@@ -5,16 +5,38 @@
 
 packages:
 - completed:
-    name: overeasy
+    name: int-like
     version: 0.1.0
-    git: git@github.com:ejconlon/overeasy.git
+    git: git@github.com:ejconlon/int-like.git
     pantry-tree:
-      size: 2195
-      sha256: c0ec2e199714d013c34b7fa709b871113cd29bf6fc0fdf7dc632137a3b8b72b0
-    commit: 7682ce906a3a446156e274c507e746978e076d0e
+      size: 1134
+      sha256: 505e65f19ced2a1aff66bc880fa3f194f8d44305fae730ca08a19ddb64776328
+    commit: e814624a26d71f02582e5cb9ea0955aa721d509e
   original:
-    git: git@github.com:ejconlon/overeasy.git
-    commit: 7682ce906a3a446156e274c507e746978e076d0e
+    git: git@github.com:ejconlon/int-like.git
+    commit: e814624a26d71f02582e5cb9ea0955aa721d509e
+- completed:
+    name: prop-unit
+    version: 0.1.0
+    git: git@github.com:ejconlon/prop-unit.git
+    pantry-tree:
+      size: 840
+      sha256: 099ec2bde5af2374b4c1a9a57800031c3168cf51262330327897f9d21f9b1340
+    commit: 167f919ee66dc2f6f17b9ad952be3921779789ea
+  original:
+    git: git@github.com:ejconlon/prop-unit.git
+    commit: 167f919ee66dc2f6f17b9ad952be3921779789ea
+- completed:
+    name: unfree
+    version: 0.1.0
+    git: git@github.com:ejconlon/unfree.git
+    pantry-tree:
+      size: 882
+      sha256: 1701e4607bab88a179c472436490f5a69c21f312884893b73ef88a11a2b9601b
+    commit: a2efb3bc373b78a62dc2b4b47918f10bf2fffaf4
+  original:
+    git: git@github.com:ejconlon/unfree.git
+    commit: a2efb3bc373b78a62dc2b4b47918f10bf2fffaf4
 - completed:
     hackage: algebraic-graphs-0.6@sha256:9b05e54b351a5141bc8fe46c095095627c34defc8375aa531a4753091a81f138,8755
     pantry-tree:
@@ -24,7 +46,7 @@ packages:
     hackage: algebraic-graphs-0.6
 snapshots:
 - completed:
-    size: 586296
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/18.yaml
-    sha256: 63539429076b7ebbab6daa7656cfb079393bf644971156dc349d7c0453694ac2
-  original: lts-18.18
+    size: 586110
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/21.yaml
+    sha256: ce4fb8d44f3c6c6032060a02e0ebb1bd29937c9a70101c1517b92a87d9515160
+  original: lts-18.21
