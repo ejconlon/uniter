@@ -1,5 +1,7 @@
 # uniter
 
+[![CircleCI](https://circleci.com/gh/ejconlon/uniter/tree/master.svg?style=svg)](https://circleci.com/gh/ejconlon/uniter/tree/master)
+
 "I'm a uniter, not a divider!"
 
 This is a generic unification library similar to [unification-fd](https://hackage.haskell.org/package/unification-fd).
