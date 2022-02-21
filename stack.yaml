@@ -1,4 +1,4 @@
-resolver: lts-18.21
+resolver: lts-18.26
 
 ghc-options:
   "$everything": -haddock
@@ -12,5 +12,5 @@ extra-deps:
 - git: git@github.com:ejconlon/prop-unit.git
   commit: 167f919ee66dc2f6f17b9ad952be3921779789ea
 - git: git@github.com:ejconlon/unfree.git
-  commit: a2efb3bc373b78a62dc2b4b47918f10bf2fffaf4
+  commit: c4eaee614c8a62d8c489dbdc9806db7c735435db
 - algebraic-graphs-0.6

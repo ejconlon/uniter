@@ -32,11 +32,11 @@ packages:
     git: git@github.com:ejconlon/unfree.git
     pantry-tree:
       size: 882
-      sha256: 1701e4607bab88a179c472436490f5a69c21f312884893b73ef88a11a2b9601b
-    commit: a2efb3bc373b78a62dc2b4b47918f10bf2fffaf4
+      sha256: 784eafe8da10687e79f86d1764bee7a961761880309c3999afdecd9a0e6e9fac
+    commit: c4eaee614c8a62d8c489dbdc9806db7c735435db
   original:
     git: git@github.com:ejconlon/unfree.git
-    commit: a2efb3bc373b78a62dc2b4b47918f10bf2fffaf4
+    commit: c4eaee614c8a62d8c489dbdc9806db7c735435db
 - completed:
     hackage: algebraic-graphs-0.6@sha256:9b05e54b351a5141bc8fe46c095095627c34defc8375aa531a4753091a81f138,8755
     pantry-tree:
@@ -46,7 +46,7 @@ packages:
     hackage: algebraic-graphs-0.6
 snapshots:
 - completed:
-    size: 586110
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/21.yaml
-    sha256: ce4fb8d44f3c6c6032060a02e0ebb1bd29937c9a70101c1517b92a87d9515160
-  original: lts-18.21
+    size: 590102
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/26.yaml
+    sha256: e76d109964d9335abb412e22139c5bce3078be290ac6d90b8ecea6cc009bb198
+  original: lts-18.26
