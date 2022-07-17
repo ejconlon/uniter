@@ -24,8 +24,6 @@ source-repository head
 
 library
   exposed-modules:
-      Test.Uniter.Main
-      Test.Uniter.State
       Uniter.Align
       Uniter.Core
       Uniter.Example
@@ -80,7 +78,6 @@ library
     , microlens-mtl ==0.2.*
     , mtl ==2.2.*
     , pretty-simple ==4.0.*
-    , prop-unit ==0.1.*
     , recursion-schemes ==5.2.*
     , streaming ==0.2.*
     , text >=1.2 && <2.1
@@ -134,7 +131,6 @@ executable uniter-example
     , microlens-mtl ==0.2.*
     , mtl ==2.2.*
     , pretty-simple ==4.0.*
-    , prop-unit ==0.1.*
     , recursion-schemes ==5.2.*
     , streaming ==0.2.*
     , text >=1.2 && <2.1
@@ -148,6 +144,8 @@ test-suite uniter-test
   type: exitcode-stdio-1.0
   main-is: Main.hs
   other-modules:
+      Test.Uniter.Main
+      Test.Uniter.State
       Paths_uniter
   hs-source-dirs:
       test

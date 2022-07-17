@@ -10,6 +10,4 @@ as everything is chucked into a big "union-map" structure. Currently there is no
 
 The best example is [here](https://github.com/ejconlon/uniter/blob/master/src/Uniter/Example.hs) for now.
 
-It depends on [overeasy](https://github.com/ejconlon/overeasy) at a recent SHA not for the e-graph but for some expression and container code that should probably be split out anyway.
-
-Beware: there are many bugs here.
+Beware: there are probably many bugs here.

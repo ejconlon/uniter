@@ -10,11 +10,11 @@ packages:
     git: git@github.com:ejconlon/int-like.git
     pantry-tree:
       size: 1134
-      sha256: 505e65f19ced2a1aff66bc880fa3f194f8d44305fae730ca08a19ddb64776328
-    commit: e814624a26d71f02582e5cb9ea0955aa721d509e
+      sha256: eb8c6164e68d71ca83757cf63b79015847341c2165c34ba412eccffabd973d7f
+    commit: c277da03d6e0b61280f67169c4dc6219a2578faa
   original:
     git: git@github.com:ejconlon/int-like.git
-    commit: e814624a26d71f02582e5cb9ea0955aa721d509e
+    commit: c277da03d6e0b61280f67169c4dc6219a2578faa
 - completed:
     name: prop-unit
     version: 0.1.0
@@ -37,16 +37,9 @@ packages:
   original:
     git: git@github.com:ejconlon/unfree.git
     commit: c4eaee614c8a62d8c489dbdc9806db7c735435db
-- completed:
-    hackage: algebraic-graphs-0.6@sha256:9b05e54b351a5141bc8fe46c095095627c34defc8375aa531a4753091a81f138,8755
-    pantry-tree:
-      size: 4201
-      sha256: 1d22c40b256485ae3ca4ba23606bba2ef0d1b5fd759f9dcdf0e501b0c83f1959
-  original:
-    hackage: algebraic-graphs-0.6
 snapshots:
 - completed:
-    size: 590102
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/18/26.yaml
-    sha256: e76d109964d9335abb412e22139c5bce3078be290ac6d90b8ecea6cc009bb198
-  original: lts-18.26
+    size: 618952
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/19/15.yaml
+    sha256: 82e5ccb47b068521de4055034e8aa278eab430b586881d9cc29ba8b382ce3253
+  original: lts-19.15

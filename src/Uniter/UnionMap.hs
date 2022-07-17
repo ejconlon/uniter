@@ -371,7 +371,7 @@ mergeManyUnionMap g k js u = goLookupK where
       UnionMapTraceResFound jr jv jacc -> do
         put (doCompactCheck kr jr w jacc)
         pure jv
-  doTraceJs kr w = runDropM (traverse (doTraceJ kr) js) w
+  doTraceJs kr = runDropM (traverse (doTraceJ kr) js)
   goLookupK = case lookupUnionMap k u of
     UnionMapLookupResMissing kx -> if k == kx then goAssign else UnionMapMergeResMissing kx
     UnionMapLookupResFound kr kv mw -> goLookupJs kr kv (fromMaybe u mw)
