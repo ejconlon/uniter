@@ -27,6 +27,7 @@ import Uniter.Interface (RebindMap, initialGraph, processGraph)
 import Uniter.Process (ProcessError)
 import Uniter.Render (renderDot)
 
+-- | A simple expression language with constants, vars, lets, tuples, and projections.
 data Exp =
     ExpConst
   | ExpUseBind !Text
@@ -36,27 +37,32 @@ data Exp =
   | ExpSecond Exp
   deriving stock (Eq, Show)
 
+-- TH can build us an expression functor ExpF to factor our the recursion.
 makeBaseFunctor ''Exp
 
 deriving stock instance Eq a => Eq (ExpF a)
 deriving stock instance Show a => Show (ExpF a)
 
+-- | Our expressions are either constant type or pairs of types.
 data Ty =
     TyPair Ty Ty
   | TyConst
   deriving stock (Eq, Show)
 
+-- Builds a type functor TyF
 makeBaseFunctor ''Ty
 
 deriving stock instance Eq a => Eq (TyF a)
 deriving stock instance Show a => Show (TyF a)
 
 instance Alignable UnalignableError TyF where
+  -- Align our type functor in the natural way
   align TyConstF TyConstF = Right TyConstF
   align (TyPairF a b) (TyPairF c d) = Right (TyPairF (These a c) (These b d))
   align _ _ = Left UnalignableError
 
 instance Unitable FreeEnv FreeEnvMissingError TyF ExpF where
+  -- Inspect our expression functor and perform unification
   unite = \case
     ExpConstF -> uniterAddNode TyConstF
     ExpUseBindF n -> do
