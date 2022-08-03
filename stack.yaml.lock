@@ -21,11 +21,11 @@ packages:
     git: git@github.com:ejconlon/prop-unit.git
     pantry-tree:
       size: 840
-      sha256: 099ec2bde5af2374b4c1a9a57800031c3168cf51262330327897f9d21f9b1340
-    commit: 167f919ee66dc2f6f17b9ad952be3921779789ea
+      sha256: 1194fa87c2c23896080a54018f682b6e4a6094fc2156822179380a3e51fc9c92
+    commit: d562ed5c39b4b87b4c226126f249f0e97d89c2dd
   original:
     git: git@github.com:ejconlon/prop-unit.git
-    commit: 167f919ee66dc2f6f17b9ad952be3921779789ea
+    commit: d562ed5c39b4b87b4c226126f249f0e97d89c2dd
 - completed:
     name: unfree
     version: 0.1.0
@@ -39,7 +39,7 @@ packages:
     commit: c4eaee614c8a62d8c489dbdc9806db7c735435db
 snapshots:
 - completed:
-    size: 618952
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/19/15.yaml
-    sha256: 82e5ccb47b068521de4055034e8aa278eab430b586881d9cc29ba8b382ce3253
-  original: lts-19.15
+    size: 619161
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/19/17.yaml
+    sha256: 7f47507fd037228a8d23cf830f5844e1f006221acebdd7cb49f2f5fb561e0546
+  original: lts-19.17

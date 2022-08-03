@@ -1,4 +1,4 @@
-resolver: lts-19.15
+resolver: lts-19.17
 
 ghc-options:
   "$everything": -haddock
@@ -10,6 +10,6 @@ extra-deps:
 - git: git@github.com:ejconlon/int-like.git
   commit: c277da03d6e0b61280f67169c4dc6219a2578faa
 - git: git@github.com:ejconlon/prop-unit.git
-  commit: 167f919ee66dc2f6f17b9ad952be3921779789ea
+  commit: d562ed5c39b4b87b4c226126f249f0e97d89c2dd
 - git: git@github.com:ejconlon/unfree.git
   commit: c4eaee614c8a62d8c489dbdc9806db7c735435db
