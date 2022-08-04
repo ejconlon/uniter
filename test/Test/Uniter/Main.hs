@@ -10,6 +10,7 @@ import IntLike.Set (IntLikeSet)
 import qualified IntLike.Set as ILS
 import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
+import Uniter.Example (Ty (..), exampleExponential, exampleLinear, processMinimal)
 import Uniter.UnionMap (Changed (..), UnionEquiv (..), UnionMap, UnionMapAddVal (..), UnionMapLookupVal (..),
                         UnionMapMergeVal (..), UnionMapTraceRes (..), UnionMergeOne, addUnionMapM, concatUnionMergeOne,
                         emptyUnionMap, equivUnionMapM, lookupUnionMapM, mergeOneUnionMapM, sizeUnionMap, traceUnionMap,
@@ -153,7 +154,17 @@ testUmUnit = testGroup "UM unit"
   , testUmTail
   ]
 
+testExample :: TestTree
+testExample = testUnit "example" $ do
+  let expLinTy = TyPair TyConst TyConst
+  actualLinTy <- processMinimal exampleLinear
+  actualLinTy === expLinTy
+  let expExpTy = TyPair expLinTy (TyPair expLinTy expLinTy)
+  actualExpTy <- processMinimal exampleExponential
+  actualExpTy === expExpTy
+
 main :: IO ()
 main = testMain $ \_ -> testGroup "Uniter"
   [ testUmUnit
+  , testExample
   ]

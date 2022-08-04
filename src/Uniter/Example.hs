@@ -12,10 +12,16 @@ module Uniter.Example
   , exampleExponential
   , initialGraphExp
   , processGraphExp
+  , resolveTy
   , writeDotExp
+  , MissingIdErr (..)
+  , processVerbose
+  , processMinimal
   , main
   ) where
 
+import Control.Monad.Catch (Exception, MonadThrow (..))
+import Control.Monad.State.Strict (evalState)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Text (Text)
 import Data.These (These (..))
@@ -28,8 +34,6 @@ import Uniter.Halt (halt)
 import Uniter.Interface (RebindMap, initialGraph, processGraph)
 import Uniter.Process (ProcessError)
 import Uniter.Render (renderDot)
-import Control.Exception (throwIO)
-import Control.Monad.State.Strict (evalState)
 
 -- | A simple expression language with constants, vars, lets, tuples, and projections.
 data Exp =
@@ -127,11 +131,11 @@ exampleExponential =
       x5 = ExpUseBind "v4"
   in x1
 
-initialGraphExp :: Exp -> IO (BoundId, GraphState TyF)
+initialGraphExp :: MonadThrow m => Exp -> m (BoundId, GraphState TyF)
 initialGraphExp expr =
   let (ea, gs) = initialGraph expr emptyFreeEnv
   in case ea of
-    Left err -> throwIO err
+    Left err -> throwM err
     Right a -> pure (a, gs)
 
 processGraphExp :: GraphState TyF -> Either (ProcessError UnalignableError) (RebindMap, GraphState TyF)
@@ -143,15 +147,15 @@ resolveTy = evalState . graphResolveVar
 writeDotExp :: FilePath -> GraphState TyF -> IO ()
 writeDotExp p = writeFile p . renderDot . gsBoundEnv
 
-main :: IO ()
-main = do
-  process "linear" exampleLinear
-  process "exponential" exampleExponential
+newtype MissingIdErr = MissingIdErr { unMissingIdErr :: BoundId }
+  deriving stock (Eq, Show)
+
+instance Exception MissingIdErr
 
 -- | A complete example of how to infer the type of an expression
 -- with unification through 'Unitable' and 'Alignable'.
-process :: String -> Exp -> IO ()
-process name expr = do
+processVerbose :: String -> Exp -> IO ()
+processVerbose name expr = do
   putStrLn ("*** Processing example: " ++ show name)
   putStrLn "--- Expression:"
   pPrint expr
@@ -161,7 +165,7 @@ process name expr = do
   putStrLn "--- Initial graph:"
   pPrint ig
   case processGraphExp ig of
-    Left e -> throwIO e
+    Left e -> throwM e
     Right (rebinds, pg) -> do
       writeDotExp ("dot/" ++ name ++ "-processed.dot") pg
       putStrLn "--- Rebind map:"
@@ -169,7 +173,23 @@ process name expr = do
       putStrLn "--- Final graph:"
       pPrint pg
       case resolveTy expId pg of
-        Left missingId -> fail ("Missing id: " ++ show missingId)
+        Left missingId -> throwM (MissingIdErr missingId)
         Right ty -> do
           putStrLn "--- Final type: "
           pPrint ty
+
+-- | A minimal variant
+processMinimal :: MonadThrow m => Exp -> m Ty
+processMinimal expr = do
+  (expId, ig) <- initialGraphExp expr
+  case processGraphExp ig of
+    Left e -> throwM e
+    Right (_, pg) -> do
+      case resolveTy expId pg of
+        Left missingId -> throwM (MissingIdErr missingId)
+        Right ty -> pure ty
+
+main :: IO ()
+main = do
+  processVerbose "linear" exampleLinear
+  processVerbose "exponential" exampleExponential

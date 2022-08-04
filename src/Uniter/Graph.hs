@@ -69,6 +69,7 @@ streamBoundEnv = foldr consStream endStream . toListBoundEnv where
       ElemNode n -> S.wrap (EventAddNode n y t)
       ElemEq i j -> S.wrap (EventEmitEq i j y t)
 
+-- TODO need to be careful about recursive structures
 resolveVar :: (Corecursive t, Base t ~ f, Traversable f) => BoundId -> BoundEnv f -> Either BoundId t
 resolveVar v b@(BoundEnv m) =
   case ILM.lookup v m of

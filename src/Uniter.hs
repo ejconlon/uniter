@@ -10,4 +10,4 @@ module Uniter
   ) where
 
 import Uniter.Align (Alignable (..))
-import Uniter.Core (Unitable (..), uniterEmitEq, uniterAddNode, uniterFresh, uniteTerm)
+import Uniter.Core (Unitable (..), uniteTerm, uniterAddNode, uniterEmitEq, uniterFresh)
