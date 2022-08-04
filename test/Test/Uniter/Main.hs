@@ -128,7 +128,7 @@ testUmRec = testUnit "UM rec" $ runS emptyUMV $ do
     bwd === mapVV [('b', 'a'), ('c', 'a')]
 
 testUmTail :: TestTree
-testUmTail = testUnit "UM rec" $ runS emptyUMV $ do
+testUmTail = testUnit "UM tail" $ runS emptyUMV $ do
   applyS $ do
     _ <- addUnionMapM (toV 'a') 1
     _ <- addUnionMapM (toV 'b') 2

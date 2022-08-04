@@ -1,6 +1,5 @@
 module Uniter.FreeEnv
-  ( FreeName (..)
-  , FreeEnv (..)
+  ( FreeEnv
   , FreeEnvLens
   , emptyFreeEnv
   , toListFreeEnv
@@ -13,55 +12,45 @@ module Uniter.FreeEnv
   , FreeEnvMissingError (..)
   ) where
 
-import Control.DeepSeq (NFData)
 import Control.Exception (Exception)
 import Control.Monad.Reader (MonadReader (..))
-import Data.Hashable (Hashable)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import Data.String (IsString)
-import Data.Text (Text)
 import Data.Typeable (Typeable)
 import Lens.Micro (Lens', over)
 import Lens.Micro.Mtl (view)
 import Uniter.Core (BoundId)
 
-newtype FreeName = FreeName { unFreeName :: Text }
-  deriving stock (Show)
-  deriving newtype (Eq, Ord, Hashable, NFData, IsString)
+type FreeEnv a = Map a BoundId
 
-newtype FreeEnv = FreeEnv { unFreeEnv :: Map FreeName BoundId }
-  deriving stock (Show)
-  deriving newtype (Eq)
+type FreeEnvLens a s = Lens' s (FreeEnv a)
 
-type FreeEnvLens s = Lens' s FreeEnv
+emptyFreeEnv :: FreeEnv a
+emptyFreeEnv = Map.empty
 
-emptyFreeEnv :: FreeEnv
-emptyFreeEnv = FreeEnv Map.empty
+toListFreeEnv :: FreeEnv a -> [(a, BoundId)]
+toListFreeEnv = Map.toList
 
-toListFreeEnv :: FreeEnv -> [(FreeName, BoundId)]
-toListFreeEnv = Map.toList . unFreeEnv
+insertFreeEnv :: Ord a => a -> BoundId -> FreeEnv a -> FreeEnv a
+insertFreeEnv = Map.insert
 
-insertFreeEnv :: FreeName -> BoundId -> FreeEnv -> FreeEnv
-insertFreeEnv a b (FreeEnv m) = FreeEnv (Map.insert a b m)
-
-insertFreeEnvLM :: MonadReader r m => FreeEnvLens r -> FreeName -> BoundId -> m a -> m a
+insertFreeEnvLM :: (MonadReader r m, Ord a) => FreeEnvLens a r -> a -> BoundId -> m c -> m c
 insertFreeEnvLM l a b = local (over l (insertFreeEnv a b))
 
-insertFreeEnvM :: MonadReader FreeEnv m => FreeName -> BoundId -> m a -> m a
+insertFreeEnvM :: (MonadReader (FreeEnv a) m, Ord a) => a -> BoundId -> m c -> m c
 insertFreeEnvM = insertFreeEnvLM id
 
-lookupFreeEnv :: FreeName -> FreeEnv -> Maybe BoundId
-lookupFreeEnv a (FreeEnv m) = Map.lookup a m
+lookupFreeEnv :: Ord a => a -> FreeEnv a -> Maybe BoundId
+lookupFreeEnv = Map.lookup
 
-lookupFreeEnvLM :: MonadReader r m => FreeEnvLens r -> FreeName -> m (Maybe BoundId)
+lookupFreeEnvLM :: (MonadReader r m, Ord a) => FreeEnvLens a r -> a -> m (Maybe BoundId)
 lookupFreeEnvLM l a = fmap (lookupFreeEnv a) (view l)
 
-lookupFreeEnvM :: MonadReader FreeEnv m => FreeName -> m (Maybe BoundId)
+lookupFreeEnvM :: (MonadReader (FreeEnv a) m, Ord a) => a -> m (Maybe BoundId)
 lookupFreeEnvM = lookupFreeEnvLM id
 
-newtype FreeEnvMissingError = FreeEnvMissingError { unFreeEnvMissingError :: FreeName }
+newtype FreeEnvMissingError a = FreeEnvMissingError { unFreeEnvMissingError :: a }
   deriving newtype (Eq, Typeable)
   deriving stock (Show)
 
-instance Exception FreeEnvMissingError
+instance (Show a, Typeable a) => Exception (FreeEnvMissingError a)
