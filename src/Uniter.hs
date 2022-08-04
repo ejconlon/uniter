@@ -5,6 +5,7 @@ module Uniter
   , Alignable (..)
   , UnalignableErr (..)
   , BoundId (..)
+  , UniterM
   , Unitable (..)
   , uniterEmitEq
   , uniterEmitAllEq
@@ -18,7 +19,8 @@ module Uniter
   ) where
 
 import Uniter.Align (Alignable (..), UnalignableErr (..))
-import Uniter.Core (BoundId (..), Unitable (..), uniteTerm, uniterAddNode, uniterEmitAllEq, uniterEmitEq, uniterFresh)
+import Uniter.Core (BoundId (..), Unitable (..), UniterM, uniteTerm, uniterAddNode, uniterEmitAllEq, uniterEmitEq,
+                    uniterFresh)
 import Uniter.FreeEnv
 import Uniter.Graph (GraphState)
 import Uniter.Halt (MonadHalt (..))
