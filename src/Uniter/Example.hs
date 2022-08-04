@@ -10,30 +10,18 @@ module Uniter.Example
   , TyF (..)
   , exampleLinear
   , exampleExponential
-  , initialGraphExp
-  , processGraphExp
-  , resolveTy
-  , writeDotExp
-  , MissingIdErr (..)
   , processVerbose
-  , processMinimal
   , main
   ) where
 
 import Control.Monad.Catch (Exception, MonadThrow (..))
-import Control.Monad.State.Strict (evalState)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Text (Text)
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
-import Uniter.Align (Alignable (..), UnalignableError (..))
-import Uniter.Core (BoundId, Unitable (..), uniterAddNode, uniterEmitEq, uniterFresh)
-import Uniter.FreeEnv (FreeEnv, FreeEnvMissingError (..), emptyFreeEnv, insertFreeEnvM, lookupFreeEnvM)
-import Uniter.Graph (GraphState (..), graphResolveVar)
-import Uniter.Halt (halt)
-import Uniter.Interface (RebindMap, initialGraph, processGraph)
-import Uniter.Process (ProcessError)
-import Uniter.Render (renderDot)
+import Uniter (Alignable (..), BoundId, FreeEnv, FreeEnvMissingErr (..), GraphState, UnalignableErr (..), Unitable (..),
+               emptyFreeEnv, extractResult, halt, initialGraph, insertFreeEnvM, lookupFreeEnvM, processGraph,
+               uniterAddNode, uniterEmitEq, uniterFresh, writeDotGraph)
 
 -- | A simple expression language with constants, vars, lets, tuples, and projections.
 data Exp =
@@ -63,13 +51,13 @@ makeBaseFunctor ''Ty
 deriving stock instance Eq a => Eq (TyF a)
 deriving stock instance Show a => Show (TyF a)
 
-instance Alignable UnalignableError TyF where
+instance Alignable UnalignableErr TyF where
   -- Align our type functor in the natural way
   align TyConstF TyConstF = Right TyConstF
   align (TyPairF a b) (TyPairF c d) = Right (TyPairF (These a c) (These b d))
-  align _ _ = Left UnalignableError
+  align _ _ = Left UnalignableErr
 
-instance Unitable (FreeEnv Text) (FreeEnvMissingError Text) TyF ExpF where
+instance Unitable (FreeEnv Text) (FreeEnvMissingErr Text) TyF ExpF where
   -- Inspect our expression functor and perform unification
   unite = \case
     ExpConstF ->
@@ -78,7 +66,7 @@ instance Unitable (FreeEnv Text) (FreeEnvMissingError Text) TyF ExpF where
     ExpUseBindF n -> do
       -- vars require we lookup the binding, throwing if it's not there
       b <- lookupFreeEnvM n
-      maybe (halt (FreeEnvMissingError n)) pure b
+      maybe (halt (FreeEnvMissingErr n)) pure b
     ExpDefBindF n mx my -> do
       -- first get the type of the argument of the let
       x <- mx
@@ -131,21 +119,8 @@ exampleExponential =
       x5 = ExpUseBind "v4"
   in x1
 
-initialGraphExp :: MonadThrow m => Exp -> m (BoundId, GraphState TyF)
-initialGraphExp expr =
-  let (ea, gs) = initialGraph expr emptyFreeEnv
-  in case ea of
-    Left err -> throwM err
-    Right a -> pure (a, gs)
-
-processGraphExp :: GraphState TyF -> Either (ProcessError UnalignableError) (RebindMap, GraphState TyF)
-processGraphExp = processGraph
-
-resolveTy :: BoundId -> GraphState TyF -> Either BoundId Ty
-resolveTy = evalState . graphResolveVar
-
-writeDotExp :: FilePath -> GraphState TyF -> IO ()
-writeDotExp p = writeFile p . renderDot . gsBoundEnv
+extractTy :: BoundId -> GraphState TyF -> Either BoundId Ty
+extractTy = extractResult
 
 newtype MissingIdErr = MissingIdErr { unMissingIdErr :: BoundId }
   deriving stock (Eq, Show)
@@ -159,35 +134,27 @@ processVerbose name expr = do
   putStrLn ("*** Processing example: " ++ show name)
   putStrLn "--- Expression:"
   pPrint expr
-  (expId, ig) <- initialGraphExp expr
-  writeDotExp ("dot/" ++ name ++ "-initial.dot") ig
-  putStrLn ("--- Expression id: " ++ show expId)
-  putStrLn "--- Initial graph:"
-  pPrint ig
-  case processGraphExp ig of
-    Left e -> throwM e
-    Right (rebinds, pg) -> do
-      writeDotExp ("dot/" ++ name ++ "-processed.dot") pg
-      putStrLn "--- Rebind map:"
-      pPrint rebinds
-      putStrLn "--- Final graph:"
-      pPrint pg
-      case resolveTy expId pg of
-        Left missingId -> throwM (MissingIdErr missingId)
-        Right ty -> do
-          putStrLn "--- Final type: "
-          pPrint ty
-
--- | A minimal variant
-processMinimal :: MonadThrow m => Exp -> m Ty
-processMinimal expr = do
-  (expId, ig) <- initialGraphExp expr
-  case processGraphExp ig of
-    Left e -> throwM e
-    Right (_, pg) -> do
-      case resolveTy expId pg of
-        Left missingId -> throwM (MissingIdErr missingId)
-        Right ty -> pure ty
+  let (ea, ig) = initialGraph expr emptyFreeEnv
+  case ea of
+    Left err -> throwM err
+    Right expId -> do
+      writeDotGraph ("dot/" ++ name ++ "-initial.dot") ig
+      putStrLn ("--- Expression id: " ++ show expId)
+      putStrLn "--- Initial graph:"
+      pPrint ig
+      case processGraph ig of
+        Left err -> throwM err
+        Right (rebinds, pg) -> do
+          writeDotGraph ("dot/" ++ name ++ "-processed.dot") pg
+          putStrLn "--- Rebind map:"
+          pPrint rebinds
+          putStrLn "--- Final graph:"
+          pPrint pg
+          case extractTy expId pg of
+            Left missingId -> throwM (MissingIdErr missingId)
+            Right ty -> do
+              putStrLn "--- Final type: "
+              pPrint ty
 
 main :: IO ()
 main = do

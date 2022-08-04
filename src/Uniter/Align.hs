@@ -1,5 +1,5 @@
 module Uniter.Align
-  ( UnalignableError (..)
+  ( UnalignableErr (..)
   , Alignable (..)
   ) where
 
@@ -9,10 +9,10 @@ import Data.These (These (..))
 import Data.Typeable (Typeable)
 
 -- | You can just use this error if you don't feel like reporting more when alignment fails.
-data UnalignableError = UnalignableError
-  deriving stock (Eq, Show, Typeable)
+data UnalignableErr = UnalignableErr
+  deriving stock (Eq, Ord, Show, Typeable)
 
-instance Exception UnalignableError
+instance Exception UnalignableErr
 
 -- | Aligns the holes of compatible structures
 class Traversable f => Alignable e f | f -> e where

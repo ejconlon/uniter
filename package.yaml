@@ -1,17 +1,17 @@
 name:                uniter
-version:             0.1.0
-github:              "githubuser/uniter"
+version:             0.2.0
+github:              "ejconlon/uniter"
 license:             BSD3
-author:              "Author name here"
-maintainer:          "example@example.com"
-copyright:           "(c) 2021 Author name here"
+author:              "Eric Conlon"
+maintainer:          "ejconlon@gmail.com"
+copyright:           "(c) 2022 Eric Conlon"
 # category:            Undefined
 # synopsis:            Undefined
 
 extra-source-files:
 - README.md
 
-description: Please see the README on GitHub at <https://github.com/githubuser/uniter#readme>
+description: Please see the README on GitHub at <https://github.com/ejconlon/uniter#readme>
 
 dependencies:
 - base >= 4.12 && < 5

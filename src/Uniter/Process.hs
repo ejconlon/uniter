@@ -2,7 +2,7 @@
 
 -- | The core of unification - take a
 module Uniter.Process
-  ( ProcessError (..)
+  ( ProcessErr (..)
   , Defn (..)
   , defnTraversal
   , ProcessState (..)
@@ -31,13 +31,13 @@ import Uniter.State (KeepM, runKeepM)
 import Uniter.UnionMap (UnionMap, UnionMapAddVal (..), UnionMapLens, UnionMapLookupVal (..), UnionMapMergeVal (..),
                         UnionMergeMany, addUnionMapLM, emptyUnionMap, lookupUnionMapLM, mergeManyUnionMapLM)
 
-data ProcessError e =
-    ProcessErrorDuplicate !BoundId
-  | ProcessErrorMissing !BoundId
-  | ProcessErrorEmbed !e
-  deriving stock (Eq, Show, Typeable)
+data ProcessErr e =
+    ProcessErrDuplicate !BoundId
+  | ProcessErrMissing !BoundId
+  | ProcessErrEmbed !e
+  deriving stock (Eq, Ord, Show, Typeable)
 
-instance (Show e, Typeable e) => Exception (ProcessError e)
+instance (Show e, Typeable e) => Exception (ProcessErr e)
 
 data Defn f =
     DefnNode !(Node f)
@@ -64,23 +64,17 @@ psUnionMapL = lens psUnionMap (\ps um -> ps { psUnionMap = um })
 newProcessState :: BoundId -> ProcessState f
 newProcessState uniq = ProcessState uniq emptyUnionMap
 
-newtype ProcessM e f a = ProcessM { unProcessM :: KeepM (ProcessError e) (ProcessState f) a }
-  deriving newtype (Functor, Applicative, Monad, MonadState (ProcessState f), MonadHalt (ProcessError e))
+newtype ProcessM e f a = ProcessM { unProcessM :: KeepM (ProcessErr e) (ProcessState f) a }
+  deriving newtype (Functor, Applicative, Monad, MonadState (ProcessState f), MonadHalt (ProcessErr e))
 
-runProcessM :: ProcessM e f a -> ProcessState f -> (Either (ProcessError e) a, ProcessState f)
+runProcessM :: ProcessM e f a -> ProcessState f -> (Either (ProcessErr e) a, ProcessState f)
 runProcessM = runKeepM . unProcessM
-
--- TODO can remove this because the checks happen inline
--- guardNewP :: BoundId -> ProcessM e f ()
--- guardNewP i = do
---   isMem <- gets (memberUnionMap i . psUnionMap)
---   when isMem (halt (ProcessErrorDuplicate i))
 
 lookupP :: BoundId -> ProcessM e f (BoundId, Defn f)
 lookupP i = do
   val <- lookupUnionMapLM psUnionMapL i
   case val of
-    UnionMapLookupValMissing x -> halt (ProcessErrorMissing x)
+    UnionMapLookupValMissing x -> halt (ProcessErrMissing x)
     UnionMapLookupValOk r d _ -> pure (r, d)
 
 data Duo a = Duo !a !a
@@ -91,7 +85,7 @@ data Item = Item
   , itemRoot :: !BoundId
   } deriving stock (Eq, Show)
 
--- | Effect used entirely within 'alignMerge'
+-- Effect used entirely within 'alignMerge'
 newtype AlignM e a = AlignM { unAlignM :: WriterT (Seq Item) (StateT BoundId (Except e)) a }
   deriving newtype (Functor, Applicative, Monad, MonadWriter (Seq Item), MonadState BoundId)
 
@@ -138,8 +132,8 @@ mergeP (Item children root) = do
   b <- gets psUnique
   erb <- mergeManyUnionMapLM psUnionMapL (alignMerge b) root children
   case erb of
-    UnionMapMergeValMissing i -> halt (ProcessErrorMissing i)
-    UnionMapMergeValEmbed e -> halt (ProcessErrorEmbed e)
+    UnionMapMergeValMissing i -> halt (ProcessErrMissing i)
+    UnionMapMergeValEmbed e -> halt (ProcessErrEmbed e)
     UnionMapMergeValMerged _ _ (r, i) -> modify' (\st -> st { psUnique = i }) $> r
 
 freshP :: ProcessM e f BoundId
@@ -147,7 +141,8 @@ freshP = state (\st -> let uniq = psUnique st in (uniq, st { psUnique = succ uni
 
 emitP :: Alignable e f => Item -> ProcessM e f ()
 emitP it = do
-  -- TODO need to define fresh here?
+  -- NOTE contract is that the root will not have been referenced before,
+  -- so we have to add it to the graph when we see it
   defineP DefnFresh (itemRoot it)
   emitRecP (Seq.singleton it)
 
@@ -155,23 +150,19 @@ emitRecP :: Alignable e f => Seq Item -> ProcessM e f ()
 emitRecP = \case
     Empty -> pure ()
     it :<| rest -> do
-      -- TODO disabled guard because will check inline
-      -- guardNewP (itemRoot it)
       newIts <- mergeP it
-      -- TODO need to define fresh here?
+      -- see note in emitP
       for_ newIts $ \newIt -> defineP DefnFresh (itemRoot newIt)
       emitRecP (newIts <> rest)
 
 defineP :: Defn f -> BoundId -> ProcessM e f ()
 defineP d i = do
-  -- TODO disabled guard because will check inline
-  -- guardNewP i
   val <- addUnionMapLM psUnionMapL i d
   case val of
     UnionMapAddValAdded -> pure ()
-    UnionMapAddValDuplicate -> halt (ProcessErrorDuplicate i)
+    UnionMapAddValDuplicate -> halt (ProcessErrDuplicate i)
 
-instance Alignable e f => EventHandler (ProcessError e) f (ProcessM e f) where
+instance Alignable e f => EventHandler (ProcessErr e) f (ProcessM e f) where
   handleAddNode = defineP . DefnNode
   handleEmitEq i j y = emitP (Item (Duo i j) y)
   handleFresh = defineP DefnFresh

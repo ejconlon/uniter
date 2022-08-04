@@ -6,6 +6,7 @@ module Uniter.Core
   , Node
   , UniterM
   , uniterEmitEq
+  , uniterEmitAllEq
   , uniterAddNode
   , uniterFresh
   , EventF (..)
@@ -22,6 +23,7 @@ import Control.DeepSeq (NFData)
 import Control.Monad.Identity (Identity (..))
 import Control.Monad.Reader (MonadReader (..), ReaderT (..))
 import Control.Monad.State.Strict (MonadState (..), State, runState)
+import Data.Foldable (toList)
 import Data.Functor.Foldable (Base, Recursive (cata))
 import Data.Hashable (Hashable)
 import Streaming (Stream)
@@ -62,6 +64,15 @@ instance MonadReader v (UniterM v e f) where
 uniterEmitEq :: BoundId -> BoundId -> UniterM v e f BoundId
 uniterEmitEq i j = UniterM (FreeEmbed (UniterEmitEq i j pure))
 
+-- | Emit equality constraints on all IDs.
+uniterEmitAllEq :: Foldable f => BoundId -> f BoundId -> UniterM v e f BoundId
+uniterEmitAllEq i0 js0 = go i0 (toList js0) where
+  go !i = \case
+    [] -> pure i
+    j:js -> do
+      k <- uniterEmitEq i j
+      go k js
+
 -- | Allocate an ID for the given 'Node'.
 uniterAddNode :: Node f -> UniterM v e f BoundId
 uniterAddNode n = UniterM (FreeEmbed (UniterAddNode n pure))
@@ -71,10 +82,13 @@ uniterFresh :: UniterM v e f BoundId
 uniterFresh = UniterM (FreeEmbed (UniterFresh pure))
 
 -- | The event functor for interpreting the unification effects.
+-- The last Id in each of these constructors should be one that
+-- has not been seen previously. (If so, that is an error and processing should stop.)
 data EventF e f a =
     EventHalt !e
   | EventAddNode !(Node f) !BoundId a
   | EventEmitEq !BoundId !BoundId !BoundId a
+  -- ^ Id1 Id2 MergedId
   | EventFresh !BoundId a
   deriving stock (Functor, Foldable, Traversable)
 deriving stock instance (Eq e, Eq (f BoundId), Eq a) => Eq (EventF e f a)
