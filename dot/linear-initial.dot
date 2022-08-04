@@ -10,7 +10,7 @@ digraph
   "7" [label="7: Fresh"]
   "8" [label="8: Node TyPairF 6 7"]
   "9" [label="9: Eq 1 8"]
-  "10" [label="10: Node TyPairF 5 9"]
+  "10" [label="10: Node TyPairF 3 6"]
   "1" -> "0"
   "4" -> "2"
   "4" -> "3"
@@ -20,6 +20,6 @@ digraph
   "8" -> "7"
   "9" -> "1"
   "9" -> "8"
-  "10" -> "5"
-  "10" -> "9"
+  "10" -> "3"
+  "10" -> "6"
 }

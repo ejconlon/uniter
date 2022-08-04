@@ -1,13 +1,14 @@
 digraph 
 {
-  "10" [label="10: Node TyPairF 16 16"]
+  "10" [label="10: Node TyPairF 15 16"]
   "11" [label="11: Node TyPairF 16 16"]
-  "12" [label="12: Node TyPairF 10 11"]
-  "14" [label="14: Node TyConstF"]
-  "16" [label="16: Node TyPairF 14 14"]
+  "12" [label="12: Node TyPairF 16 11"]
+  "15" [label="15: Node TyConstF"]
+  "16" [label="16: Node TyPairF 15 15"]
+  "10" -> "15"
   "10" -> "16"
   "11" -> "16"
-  "12" -> "10"
   "12" -> "11"
-  "16" -> "14"
+  "12" -> "16"
+  "16" -> "15"
 }

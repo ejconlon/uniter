@@ -1,6 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+-- | A simple example following "Efficient Functional Unification and Substitution"
+-- by Dijkstra, Middelkoop, and Swierstra.
 module Uniter.Example
   ( Exp (..)
   , ExpF (..)
@@ -21,11 +23,13 @@ import Text.Pretty.Simple (pPrint)
 import Uniter.Align (Alignable (..), UnalignableError (..))
 import Uniter.Core (BoundId, Unitable (..), uniterAddNode, uniterEmitEq, uniterFresh)
 import Uniter.FreeEnv (FreeEnv, FreeEnvMissingError (..), FreeName (..), emptyFreeEnv, insertFreeEnvM, lookupFreeEnvM)
-import Uniter.Graph (GraphState (..))
+import Uniter.Graph (GraphState (..), graphResolveVar)
 import Uniter.Halt (halt)
 import Uniter.Interface (RebindMap, initialGraph, processGraph)
 import Uniter.Process (ProcessError)
 import Uniter.Render (renderDot)
+import Control.Exception (throwIO)
+import Control.Monad.State.Strict (evalState)
 
 -- | A simple expression language with constants, vars, lets, tuples, and projections.
 data Exp =
@@ -80,13 +84,15 @@ instance Unitable FreeEnv FreeEnvMissingError TyF ExpF where
       v <- uniterFresh
       w <- uniterFresh
       y <- uniterAddNode (TyPairF v w)
-      uniterEmitEq x y
+      _ <- uniterEmitEq x y
+      pure v
     ExpSecondF mx -> do
       x <- mx
       v <- uniterFresh
       w <- uniterFresh
       y <- uniterAddNode (TyPairF v w)
-      uniterEmitEq x y
+      _ <- uniterEmitEq x y
+      pure w
 
 exampleLinear :: Exp
 exampleLinear =
@@ -116,6 +122,9 @@ initialGraphExp e =
 processGraphExp :: GraphState TyF -> Either (ProcessError UnalignableError) (RebindMap, GraphState TyF)
 processGraphExp = processGraph
 
+resolveTy :: BoundId -> GraphState TyF -> Either BoundId Ty
+resolveTy = evalState . graphResolveVar
+
 writeDotExp :: FilePath -> GraphState TyF -> IO ()
 writeDotExp p = writeFile p . renderDot . gsBoundEnv
 
@@ -125,13 +134,25 @@ main = do
   process "exponential" exampleExponential
 
 process :: String -> Exp -> IO ()
-process n e = do
-  putStrLn n
-  let (_, ig) = initialGraphExp e
+process name expr = do
+  putStrLn ("*** Processing example: " ++ show name)
+  putStrLn "--- Expression:"
+  pPrint expr
+  let (expId, ig) = initialGraphExp expr
+  writeDotExp ("dot/" ++ name ++ "-initial.dot") ig
+  putStrLn ("--- Expression id: " ++ show expId)
+  putStrLn "--- Initial graph:"
   pPrint ig
-  writeDotExp ("dot/" ++ n ++ "-initial.dot") ig
   case processGraphExp ig of
-    Left _ -> pure ()
-    Right (_, pg) -> do
+    Left e -> throwIO e
+    Right (rebinds, pg) -> do
+      writeDotExp ("dot/" ++ name ++ "-processed.dot") pg
+      putStrLn "--- Rebind map:"
+      pPrint rebinds
+      putStrLn "--- Final graph:"
       pPrint pg
-      writeDotExp ("dot/" ++ n ++ "-processed.dot") pg
+      case resolveTy expId pg of
+        Left missingId -> fail ("Missing id: " ++ show missingId)
+        Right ty -> do
+          putStrLn "--- Final type: "
+          pPrint ty

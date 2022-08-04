@@ -1,5 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 
+-- | The core of unification - take a
 module Uniter.Process
   ( ProcessError (..)
   , Defn (..)
@@ -44,6 +45,7 @@ data Defn f =
 deriving stock instance Eq (f BoundId) => Eq (Defn f)
 deriving stock instance Show (f BoundId) => Show (Defn f)
 
+-- | A traversal over 'Defn's - can get or replace all 'BoundId's
 defnTraversal :: Traversable f => Traversal' (Defn f) BoundId
 defnTraversal g = \case
   DefnFresh -> pure DefnFresh
@@ -89,6 +91,7 @@ data Item = Item
   , itemRoot :: !BoundId
   } deriving stock (Eq, Show)
 
+-- | Effect used entirely within 'alignMerge'
 newtype AlignM e a = AlignM { unAlignM :: WriterT (Seq Item) (StateT BoundId (Except e)) a }
   deriving newtype (Functor, Applicative, Monad, MonadWriter (Seq Item), MonadState BoundId)
 
@@ -119,6 +122,7 @@ alignDefns da db =
                 pure root
           pure (DefnNode h)
 
+-- | Callback to be provided to a union map to merge values of the same key by aligning their structures.
 alignMerge :: Alignable e f => BoundId -> UnionMergeMany Duo e (Defn f) (Seq Item, BoundId)
 alignMerge b mdx (Duo di dj) = res where
   res = fmap (\(v, s, w) -> ((w, s), v)) (runAlignM body b)

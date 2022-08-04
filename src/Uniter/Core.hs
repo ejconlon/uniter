@@ -1,5 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 
+-- | Core definitions for the 'Unitable' typeclass and interpretations of the 'UniterM' effect.
 module Uniter.Core
   ( BoundId (..)
   , Node

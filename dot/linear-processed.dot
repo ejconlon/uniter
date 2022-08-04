@@ -1,8 +1,8 @@
 digraph 
 {
   "9" [label="9: Node TyPairF 14 14"]
-  "10" [label="10: Node TyPairF 9 9"]
+  "10" [label="10: Node TyPairF 14 14"]
   "14" [label="14: Node TyConstF"]
   "9" -> "14"
-  "10" -> "9"
+  "10" -> "14"
 }

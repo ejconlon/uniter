@@ -18,6 +18,7 @@ instance Exception UnalignableError
 class Traversable f => Alignable e f | f -> e where
   -- | If the two structures are alignable, return a structure filled with shared parts.
   -- Law: A structure must align with itself in the natural way.
+  -- Law: Structures must individually align with their successful alignment in the natural way.
   align :: f a -> f b -> Either e (f (These a b))
   align = alignWith id
 
@@ -25,6 +26,7 @@ class Traversable f => Alignable e f | f -> e where
   alignWith :: (These a b -> c) -> f a -> f b -> Either e (f c)
   alignWith f fa fb = fmap (fmap f) (align fa fb)
 
+  -- |
   alignAll :: Foldable t => (These z a -> z) -> t (f a) -> Either (Maybe e) (f z)
   alignAll f = go (Left Nothing) . toList where
     go acc = \case
