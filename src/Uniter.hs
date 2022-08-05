@@ -1,28 +1,20 @@
 -- | Slimmest useful interface
--- TODO finish with stuff from Interface
 module Uniter
-  ( MonadHalt (..)
-  , Alignable (..)
+  ( Alignable (..)
   , UnalignableErr (..)
   , BoundId (..)
-  , UniterM
+  , UniterT
   , Unitable (..)
-  , uniterEmitEq
-  , uniterEmitAllEq
-  , uniterAddNode
-  , uniterFresh
+  , constrainEq
+  , constrainAllEq
+  , addNode
+  , freshVar
   , uniteTerm
-  , GraphState
   , ProcessErr (..)
-  , module Uniter.FreeEnv
-  , module Uniter.Interface
+  , module Uniter.Driver
   ) where
 
 import Uniter.Align (Alignable (..), UnalignableErr (..))
-import Uniter.Core (BoundId (..), Unitable (..), UniterM, uniteTerm, uniterAddNode, uniterEmitAllEq, uniterEmitEq,
-                    uniterFresh)
-import Uniter.FreeEnv
-import Uniter.Graph (GraphState)
-import Uniter.Halt (MonadHalt (..))
-import Uniter.Interface
+import Uniter.Core (BoundId (..), Unitable (..), UniterT, addNode, constrainAllEq, constrainEq, freshVar, uniteTerm)
+import Uniter.Driver
 import Uniter.Process (ProcessErr (..))

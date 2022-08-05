@@ -1,5 +1,6 @@
 module Test.Uniter.Main (main) where
 
+import Control.Monad.IO.Class (liftIO)
 import Data.Bifunctor (bimap, first)
 import Data.Char (chr, ord)
 import Data.Semigroup (Max)
@@ -10,8 +11,8 @@ import IntLike.Set (IntLikeSet)
 import qualified IntLike.Set as ILS
 import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
-import Uniter.Example (Ty (..), exampleExponential, exampleLinear)
-import Uniter.Interface (quickUniteResult)
+import Uniter.Driver (quickUniteResult)
+import Uniter.Example (Ty (..), exampleExponential, exampleLinear, runM)
 import Uniter.UnionMap (Changed (..), UnionEquiv (..), UnionMap, UnionMapAddVal (..), UnionMapLookupVal (..),
                         UnionMapMergeVal (..), UnionMapTraceRes (..), UnionMergeOne, addUnionMapM, concatUnionMergeOne,
                         emptyUnionMap, equivUnionMapM, lookupUnionMapM, mergeOneUnionMapM, sizeUnionMap, traceUnionMap,
@@ -158,10 +159,10 @@ testUmUnit = testGroup "UM unit"
 testExample :: TestTree
 testExample = testUnit "example" $ do
   let expLinTy = TyPair TyConst TyConst
-  actualLinTy <- quickUniteResult exampleLinear
+  actualLinTy <- liftIO $ runM $ quickUniteResult exampleLinear
   actualLinTy === expLinTy
   let expExpTy = TyPair expLinTy (TyPair expLinTy expLinTy)
-  actualExpTy <- quickUniteResult exampleExponential
+  actualExpTy <- liftIO $ runM $ quickUniteResult exampleExponential
   actualExpTy === expExpTy
 
 main :: IO ()

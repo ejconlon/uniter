@@ -1,17 +1,18 @@
 module Uniter.FreeEnv
   ( FreeEnv
   , FreeEnvLens
-  , emptyFreeEnv
-  , toListFreeEnv
-  , insertFreeEnv
-  , insertFreeEnvLM
-  , insertFreeEnvM
-  , insertAllFreeEnv
-  , insertAllFreeEnvLM
-  , insertAllFreeEnvM
-  , lookupFreeEnv
-  , lookupFreeEnvLM
-  , lookupFreeEnvM
+  , empty
+  , toList
+  , fromList
+  , insert
+  , insertLM
+  , insertM
+  , insertAll
+  , insertAllLM
+  , insertAllM
+  , lookup
+  , lookupLM
+  , lookupM
   , FreeEnvMissingErr (..)
   ) where
 
@@ -22,44 +23,48 @@ import qualified Data.Map.Strict as Map
 import Data.Typeable (Typeable)
 import Lens.Micro (Lens', over)
 import Lens.Micro.Mtl (view)
+import Prelude hiding (lookup)
 import Uniter.Core (BoundId)
 
 type FreeEnv a = Map a BoundId
 
 type FreeEnvLens a s = Lens' s (FreeEnv a)
 
-emptyFreeEnv :: FreeEnv a
-emptyFreeEnv = Map.empty
+empty :: FreeEnv a
+empty = Map.empty
 
-toListFreeEnv :: FreeEnv a -> [(a, BoundId)]
-toListFreeEnv = Map.toList
+toList :: FreeEnv a -> [(a, BoundId)]
+toList = Map.toList
 
-insertFreeEnv :: Ord a => a -> BoundId -> FreeEnv a -> FreeEnv a
-insertFreeEnv = Map.insert
+fromList :: Ord a => [(a, BoundId)] -> FreeEnv a
+fromList = Map.fromList
 
-insertFreeEnvLM :: (MonadReader r m, Ord a) => FreeEnvLens a r -> a -> BoundId -> m c -> m c
-insertFreeEnvLM l a b = local (over l (insertFreeEnv a b))
+insert :: Ord a => a -> BoundId -> FreeEnv a -> FreeEnv a
+insert = Map.insert
 
-insertFreeEnvM :: (MonadReader (FreeEnv a) m, Ord a) => a -> BoundId -> m c -> m c
-insertFreeEnvM = insertFreeEnvLM id
+insertLM :: (MonadReader r m, Ord a) => FreeEnvLens a r -> a -> BoundId -> m c -> m c
+insertLM l a b = local (over l (insert a b))
 
-insertAllFreeEnv :: (Foldable f, Ord a) => f (a, BoundId) -> FreeEnv a -> FreeEnv a
-insertAllFreeEnv ps m = foldr (\(a, b) n -> insertFreeEnv a b n) m ps
+insertM :: (MonadReader (FreeEnv a) m, Ord a) => a -> BoundId -> m c -> m c
+insertM = insertLM id
 
-insertAllFreeEnvLM :: (MonadReader r m, Foldable f, Ord a) => FreeEnvLens a r -> f (a, BoundId) -> m c -> m c
-insertAllFreeEnvLM l ps = local (over l (insertAllFreeEnv ps))
+insertAll :: (Foldable f, Ord a) => f (a, BoundId) -> FreeEnv a -> FreeEnv a
+insertAll ps m = foldr (\(a, b) n -> insert a b n) m ps
 
-insertAllFreeEnvM :: (MonadReader (FreeEnv a) m, Foldable f, Ord a) => f (a, BoundId) -> m c -> m c
-insertAllFreeEnvM = insertAllFreeEnvLM id
+insertAllLM :: (MonadReader r m, Foldable f, Ord a) => FreeEnvLens a r -> f (a, BoundId) -> m c -> m c
+insertAllLM l ps = local (over l (insertAll ps))
 
-lookupFreeEnv :: Ord a => a -> FreeEnv a -> Maybe BoundId
-lookupFreeEnv = Map.lookup
+insertAllM :: (MonadReader (FreeEnv a) m, Foldable f, Ord a) => f (a, BoundId) -> m c -> m c
+insertAllM = insertAllLM id
 
-lookupFreeEnvLM :: (MonadReader r m, Ord a) => FreeEnvLens a r -> a -> m (Maybe BoundId)
-lookupFreeEnvLM l a = fmap (lookupFreeEnv a) (view l)
+lookup :: Ord a => a -> FreeEnv a -> Maybe BoundId
+lookup = Map.lookup
 
-lookupFreeEnvM :: (MonadReader (FreeEnv a) m, Ord a) => a -> m (Maybe BoundId)
-lookupFreeEnvM = lookupFreeEnvLM id
+lookupLM :: (MonadReader r m, Ord a) => FreeEnvLens a r -> a -> m (Maybe BoundId)
+lookupLM l a = fmap (lookup a) (view l)
+
+lookupM :: (MonadReader (FreeEnv a) m, Ord a) => a -> m (Maybe BoundId)
+lookupM = lookupLM id
 
 newtype FreeEnvMissingErr a = FreeEnvMissingErr { unFreeEnvMissingErr :: a }
   deriving newtype (Eq, Ord, Typeable)

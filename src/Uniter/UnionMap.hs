@@ -55,6 +55,7 @@ module Uniter.UnionMap
   ) where
 
 import Control.DeepSeq (NFData)
+import Control.Monad.Except (MonadError (..))
 import Control.Monad.State.Strict (MonadState, get, put)
 import Data.Coerce (Coercible)
 import Data.Foldable (fold, foldl', toList)
@@ -65,7 +66,6 @@ import qualified IntLike.Map as ILM
 import IntLike.Set (IntLikeSet)
 import qualified IntLike.Set as ILS
 import Lens.Micro (Lens', Traversal', over)
-import Uniter.Halt (halt)
 import Uniter.State (mayStateLens, runDropM, stateLens)
 
 safeTail :: [a] -> [a]
@@ -367,7 +367,7 @@ mergeManyUnionMap g k js u = goLookupK where
   doTraceJ kr y = do
     w <- get
     case traceUnionMap y w of
-      UnionMapTraceResMissing jx -> halt jx
+      UnionMapTraceResMissing jx -> throwError jx
       UnionMapTraceResFound jr jv jacc -> do
         put (doCompactCheck kr jr w jacc)
         pure jv

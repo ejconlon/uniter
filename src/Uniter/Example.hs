@@ -8,20 +8,29 @@ module Uniter.Example
   , ExpF (..)
   , Ty (..)
   , TyF (..)
+  , M
+  , runM
   , exampleLinear
   , exampleExponential
   , processVerbose
   , main
   ) where
 
-import Control.Monad.Catch (Exception, MonadThrow (..))
+import Control.Exception (throwIO)
+import Control.Monad (void)
+import Control.Monad.Catch (MonadThrow (..))
+import Control.Monad.Except (ExceptT, MonadError (..), runExceptT)
+import Control.Monad.IO.Class (MonadIO (..))
+import Control.Monad.Reader (MonadReader, ReaderT (..))
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Text (Text)
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
-import Uniter (Alignable (..), BoundId, FreeEnv, FreeEnvMissingErr (..), GraphState, UnalignableErr (..), Unitable (..),
-               emptyFreeEnv, extractResult, halt, initialGraph, insertFreeEnvM, lookupFreeEnvM, processGraph,
-               uniterAddNode, uniterEmitEq, uniterFresh, writeDotGraph)
+import Uniter (Alignable (..), ExtractErr (..), UnalignableErr (..), Unitable (..), UniteResult (..), addNode,
+               constrainEq, freshVar, uniteResult)
+import Uniter.FreeEnv (FreeEnv, FreeEnvMissingErr (..))
+import qualified Uniter.FreeEnv as UF
+import Uniter.Render (writeDotGraph)
 
 -- | A simple expression language with constants, vars, lets, tuples, and projections.
 data Exp =
@@ -57,45 +66,52 @@ instance Alignable UnalignableErr TyF where
   align (TyPairF a b) (TyPairF c d) = Right (TyPairF (These a c) (These b d))
   align _ _ = Left UnalignableErr
 
-instance Unitable (FreeEnv Text) (FreeEnvMissingErr Text) TyF ExpF where
+-- | The effects we'll use for unification - reader for maintaining a var env, IO for debug output
+newtype M a = M { unM :: ReaderT (FreeEnv Text) (ExceptT (FreeEnvMissingErr Text) IO) a }
+  deriving newtype (Functor, Applicative, Monad, MonadReader (FreeEnv Text), MonadError (FreeEnvMissingErr Text), MonadIO, MonadThrow)
+
+runM :: M a -> IO a
+runM m = runExceptT (runReaderT (unM m) UF.empty) >>= either throwIO pure
+
+instance Unitable TyF ExpF M where
   -- Inspect our expression functor and perform unification
   unite = \case
     ExpConstF ->
       -- constants have constant type
-      uniterAddNode TyConstF
+      addNode TyConstF
     ExpUseBindF n -> do
       -- vars require we lookup the binding, throwing if it's not there
-      b <- lookupFreeEnvM n
-      maybe (halt (FreeEnvMissingErr n)) pure b
+      b <- UF.lookupM n
+      maybe (throwError (FreeEnvMissingErr n)) pure b
     ExpDefBindF n mx my -> do
       -- first get the type of the argument of the let
       x <- mx
       -- then bind the var, and return the type of the body with it bound
-      insertFreeEnvM n x my
+      UF.insertM n x my
     ExpTupleF mx my -> do
       -- find the type of both arguments
       x <- mx
       y <- my
       -- and tuple them together!
-      uniterAddNode (TyPairF x y)
+      addNode (TyPairF x y)
     ExpFirstF mx -> do
       -- find the type of the argument
       x <- mx
       -- and ensure it unifies with a tuple type
-      v <- uniterFresh
-      w <- uniterFresh
-      y <- uniterAddNode (TyPairF v w)
-      _ <- uniterEmitEq x y
+      v <- freshVar
+      w <- freshVar
+      y <- addNode (TyPairF v w)
+      _ <- constrainEq x y
       -- fst returns the type of the first element of the pair
       pure v
     ExpSecondF mx -> do
       -- just like first, find the type of the argument
       x <- mx
       -- and again ensure it unifies with a tuple type
-      v <- uniterFresh
-      w <- uniterFresh
-      y <- uniterAddNode (TyPairF v w)
-      _ <- uniterEmitEq x y
+      v <- freshVar
+      w <- freshVar
+      y <- addNode (TyPairF v w)
+      _ <- constrainEq x y
       -- BUT return something different here:
       -- snd returns the type of the second element of the pair
       pure w
@@ -119,44 +135,38 @@ exampleExponential =
       x5 = ExpUseBind "v4"
   in x1
 
-extractTy :: BoundId -> GraphState TyF -> Either BoundId Ty
-extractTy = extractResult
-
-newtype MissingIdErr = MissingIdErr { unMissingIdErr :: BoundId }
-  deriving stock (Eq, Show)
-
-instance Exception MissingIdErr
-
 -- | A complete example of how to infer the type of an expression
 -- with unification through 'Unitable' and 'Alignable'.
-processVerbose :: String -> Exp -> IO ()
-processVerbose name expr = do
-  putStrLn ("*** Processing example: " ++ show name)
-  putStrLn "--- Expression:"
-  pPrint expr
-  let (ea, ig) = initialGraph expr emptyFreeEnv
-  case ea of
-    Left err -> throwM err
-    Right expId -> do
-      writeDotGraph ("dot/" ++ name ++ "-initial.dot") ig
-      putStrLn ("--- Expression id: " ++ show expId)
-      putStrLn "--- Initial graph:"
-      pPrint ig
-      case processGraph ig of
-        Left err -> throwM err
-        Right (rebinds, pg) -> do
-          writeDotGraph ("dot/" ++ name ++ "-processed.dot") pg
-          putStrLn "--- Rebind map:"
-          pPrint rebinds
-          putStrLn "--- Final graph:"
-          pPrint pg
-          case extractTy expId pg of
-            Left missingId -> throwM (MissingIdErr missingId)
-            Right ty -> do
-              putStrLn "--- Final type: "
-              pPrint ty
+processVerbose :: String -> Exp -> IO Ty
+processVerbose name expr = runM go where
+  go = do
+    liftIO $ putStrLn ("*** Processing example: " ++ show name)
+    liftIO $ putStrLn "--- Expression:"
+    pPrint expr
+    res <- uniteResult expr
+    case res of
+      UniteResultProcessErr pe -> do
+        liftIO $ putStrLn "--- Process failure"
+        throwM pe
+      UniteResultExtractErr bid xid rs g -> do
+        liftIO $ putStrLn ("--- Extract failure: " ++ show xid)
+        goVerbose bid rs g
+        throwM (ExtractErr bid xid)
+      UniteResultSuccess bid ty rs g -> do
+        liftIO $ putStrLn "--- Success"
+        goVerbose bid rs g
+        liftIO $ putStrLn "--- Final type: "
+        pPrint ty
+        pure ty
+  goVerbose bid rs g = liftIO $ do
+    writeDotGraph ("dot/" ++ name ++ "-processed.dot") g
+    putStrLn ("--- Expr id: " ++ show bid)
+    putStrLn "--- Rebind map:"
+    pPrint rs
+    putStrLn "--- Final graph:"
+    pPrint g
 
 main :: IO ()
 main = do
-  processVerbose "linear" exampleLinear
-  processVerbose "exponential" exampleExponential
+  void $ processVerbose "linear" exampleLinear
+  void $ processVerbose "exponential" exampleExponential
