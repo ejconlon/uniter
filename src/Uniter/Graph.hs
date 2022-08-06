@@ -11,14 +11,19 @@ module Uniter.Graph
   , lookup
   , resolveVar
   , resolveNode
+  , weakenElem
+  , weaken
   ) where
 
+import Data.Bifunctor (second)
 import Data.Functor.Foldable (Base, Corecursive (..))
 import IntLike.Map (IntLikeMap)
 import qualified IntLike.Map as ILM
 import Lens.Micro (Traversal')
 import Prelude hiding (lookup)
 import Uniter.Core (BoundId (..), Node)
+import Uniter.PreGraph (PreElem (..), PreGraph)
+import qualified Uniter.PreGraph as UP
 
 data Elem g =
     ElemNode !(Node g)
@@ -55,6 +60,7 @@ lookup :: BoundId -> Graph g -> Maybe (Elem g)
 lookup x = ILM.lookup x . unGraph
 
 -- TODO need to be careful about recursive structures
+-- Also need to be careful to share memory for extracted items through memoization
 resolveVar :: (Corecursive u, Base u ~ g, Traversable g) => BoundId -> Graph g -> Either BoundId u
 resolveVar v gr@(Graph m) =
   case ILM.lookup v m of
@@ -64,6 +70,14 @@ resolveVar v gr@(Graph m) =
         ElemNode x -> resolveNode x gr
         _ -> Left v
 
--- TODO need to be careful about recursive structures
+-- See notes on resolveVar
 resolveNode :: (Corecursive u, Base u ~ g, Traversable g) => Node g -> Graph g -> Either BoundId u
 resolveNode n gr = fmap embed (traverse (`resolveVar` gr) n)
+
+weakenElem :: Elem g -> PreElem g
+weakenElem = \case
+  ElemNode g -> PreElemNode g
+  ElemFresh -> PreElemFresh
+
+weaken :: Graph g -> PreGraph g
+weaken = UP.fromList . fmap (second weakenElem) . toList

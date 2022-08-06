@@ -15,6 +15,7 @@ module Uniter
   ) where
 
 import Uniter.Align (Alignable (..), UnalignableErr (..))
-import Uniter.Core (BoundId (..), Unitable (..), UniterT, addNode, constrainAllEq, constrainEq, freshVar, uniteTerm)
+import Uniter.Class (Unitable (..), UniterT, addNode, constrainAllEq, constrainEq, freshVar, uniteTerm)
+import Uniter.Core (BoundId (..))
 import Uniter.Driver
 import Uniter.Process (ProcessErr (..))

@@ -30,7 +30,7 @@ import Uniter (Alignable (..), ExtractErr (..), UnalignableErr (..), Unitable (.
                constrainEq, freshVar, uniteResult)
 import Uniter.FreeEnv (FreeEnv, FreeEnvMissingErr (..))
 import qualified Uniter.FreeEnv as UF
-import Uniter.Render (writeDotGraph)
+import Uniter.Render (writeGraphDot, writePreGraphDot)
 
 -- | A simple expression language with constants, vars, lets, tuples, and projections.
 data Exp =
@@ -143,7 +143,8 @@ processVerbose name expr = runM go where
     liftIO $ putStrLn ("*** Processing example: " ++ show name)
     liftIO $ putStrLn "--- Expression:"
     pPrint expr
-    res <- uniteResult expr
+    (res, pg) <- uniteResult expr
+    liftIO $ writePreGraphDot ("dot/" ++ name ++ "-initial.dot") pg
     case res of
       UniteResultProcessErr pe -> do
         liftIO $ putStrLn "--- Process failure"
@@ -159,7 +160,7 @@ processVerbose name expr = runM go where
         pPrint ty
         pure ty
   goVerbose bid rs g = liftIO $ do
-    writeDotGraph ("dot/" ++ name ++ "-processed.dot") g
+    writeGraphDot ("dot/" ++ name ++ "-processed.dot") g
     putStrLn ("--- Expr id: " ++ show bid)
     putStrLn "--- Rebind map:"
     pPrint rs
