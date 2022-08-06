@@ -143,7 +143,7 @@ processVerbose name expr = runM go where
     liftIO $ putStrLn ("*** Processing example: " ++ show name)
     liftIO $ putStrLn "--- Expression:"
     pPrint expr
-    (res, pg) <- uniteResult expr
+    (pg, res) <- uniteResult expr
     liftIO $ writePreGraphDot ("dot/" ++ name ++ "-initial.dot") pg
     case res of
       UniteResultProcessErr pe -> do

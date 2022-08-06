@@ -30,7 +30,7 @@ deriving instance (Eq e, Eq (Node g), Eq u) => Eq (UniteResult e g u)
 deriving instance (Show e, Show (Node g), Show u) => Show (UniteResult e g u)
 
 -- | Perform unification on a term in one go. -- NOTE It may be helpful to alias this function with the types filled in.
-uniteResult :: (Recursive t, Base t ~ f, Unitable g f m, Corecursive u, Base u ~ g, Alignable e g) => t -> m (UniteResult e g u, PreGraph g)
+uniteResult :: (Recursive t, Base t ~ f, Unitable g f m, Corecursive u, Base u ~ g, Alignable e g) => t -> m (PreGraph g, UniteResult e g u)
 uniteResult t = do
   let uniq = toEnum 0
   let act = uniteTerm t
@@ -45,11 +45,11 @@ uniteResult t = do
           case resolveVar bid graph of
             Left xid -> UniteResultExtractErr bid xid rebinds graph
             Right u -> UniteResultSuccess bid u rebinds graph
-  pure (res, pg)
+  pure (pg, res)
 
 quickUniteResult :: (Recursive t, Base t ~ f, Unitable g f m, Corecursive u, Base u ~ g, Alignable e g, MonadThrow m, Show e, Typeable e) => t -> m u
 quickUniteResult t = do
-  r <- fmap fst (uniteResult t)
+  r <- fmap snd (uniteResult t)
   case r of
     UniteResultProcessErr pe -> throwM pe
     UniteResultExtractErr bid xid _ _ -> throwM (ExtractErr bid xid)
