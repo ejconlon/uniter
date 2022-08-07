@@ -3,6 +3,7 @@ module Uniter.Driver
   , UniteResult (..)
   , uniteResult
   , quickUniteResult
+  , driveUniterT
   ) where
 
 import Control.Exception (Exception)
@@ -10,11 +11,11 @@ import Control.Monad.Catch (MonadThrow (..))
 import Data.Functor.Foldable (Base, Corecursive, Recursive)
 import Data.Typeable (Typeable)
 import Uniter.Align (Alignable)
-import Uniter.Class (Unitable, newUniterState, preGraph, runUniterT, uniteTerm)
+import Uniter.Class (Unitable, newUniterState, preGraph, runUniterT, uniteTerm, UniterT)
 import Uniter.Core (BoundId (..), Node)
 import Uniter.Graph (Graph, resolveVar)
 import Uniter.PreGraph (PreGraph (..))
-import Uniter.Process (ProcessErr, RebindMap, embedUniterM, extract, newProcessState, runProcessT)
+import Uniter.Process (ProcessErr, RebindMap, embedUniterT, extract, newProcessState, runProcessT)
 
 data ExtractErr = ExtractErr !BoundId !BoundId
   deriving stock (Eq, Ord, Show)
@@ -32,12 +33,22 @@ deriving instance (Show e, Show (Node g), Show u) => Show (UniteResult e g u)
 
 -- | Perform unification on a term in one go. -- NOTE It may be helpful to alias this function with the types filled in.
 uniteResult :: (Recursive t, Base t ~ f, Unitable g f m, Corecursive u, Base u ~ g, Alignable e g) => t -> m (PreGraph g, UniteResult e g u)
-uniteResult t = do
+uniteResult = driveUniterT . uniteTerm
+
+quickUniteResult :: (Recursive t, Base t ~ f, Unitable g f m, Corecursive u, Base u ~ g, Alignable e g, MonadThrow m, Show e, Typeable e) => t -> m u
+quickUniteResult t = do
+  r <- fmap snd (uniteResult t)
+  case r of
+    UniteResultProcessErr pe -> throwM pe
+    UniteResultExtractErr bid xid _ _ -> throwM (ExtractErr bid xid)
+    UniteResultSuccess _ u _ _ -> pure u
+
+driveUniterT :: (Monad m, Corecursive u, Base u ~ g, Alignable e g) => UniterT g m BoundId -> m (PreGraph g, UniteResult e g u)
+driveUniterT act = do
   let uniq = toEnum 0
-  let act = uniteTerm t
   pg <- fmap fst (runUniterT (act *> preGraph) (newUniterState uniq))
   (ea, _) <- flip runProcessT (newProcessState uniq) $ do
-    bid <- embedUniterM act
+    bid <- embedUniterT act
     (rebinds, graph) <- extract
     pure (bid, rebinds, graph)
   let res = case ea of
@@ -47,11 +58,3 @@ uniteResult t = do
             Left xid -> UniteResultExtractErr bid xid rebinds graph
             Right u -> UniteResultSuccess bid u rebinds graph
   pure (pg, res)
-
-quickUniteResult :: (Recursive t, Base t ~ f, Unitable g f m, Corecursive u, Base u ~ g, Alignable e g, MonadThrow m, Show e, Typeable e) => t -> m u
-quickUniteResult t = do
-  r <- fmap snd (uniteResult t)
-  case r of
-    UniteResultProcessErr pe -> throwM pe
-    UniteResultExtractErr bid xid _ _ -> throwM (ExtractErr bid xid)
-    UniteResultSuccess _ u _ _ -> pure u

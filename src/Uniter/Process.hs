@@ -12,7 +12,7 @@ module Uniter.Process
   , compact
   , canonicalize
   , extract
-  , embedUniterM
+  , embedUniterT
   ) where
 
 import Control.Exception (Exception)
@@ -198,8 +198,8 @@ handleEvent = \case
   EventConstrainEq i j k -> constrainP (Item (Duo i j) k)
   EventFreshVar k -> defineP ElemFresh k
 
-embedUniterM :: (Monad m, Alignable e g) => UniterT g m a -> ProcessT e g m a
-embedUniterM u = do
+embedUniterT :: (Monad m, Alignable e g) => UniterT g m a -> ProcessT e g m a
+embedUniterT u = do
   q <- gets psUnique
   let us = UniterState q Empty
   (a, UniterState q' evs) <- lift (runUniterT u us)

@@ -12,7 +12,7 @@ import qualified IntLike.Set as ILS
 import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
 import Uniter.Driver (quickUniteResult)
-import Uniter.Example (Ty (..), exampleExponential, exampleLinear, runM)
+import Uniter.Example.Simple (Ty (..), exampleExponential, exampleLinear, runM)
 import Uniter.UnionMap (Changed (..), UnionEquiv (..), UnionMap, UnionMapAddVal (..), UnionMapLookupVal (..),
                         UnionMapMergeVal (..), UnionMapTraceRes (..), UnionMergeOne, addUnionMapM, concatUnionMergeOne,
                         emptyUnionMap, equivUnionMapM, lookupUnionMapM, mergeOneUnionMapM, sizeUnionMap, traceUnionMap,

@@ -2,7 +2,7 @@ include Makefile.base
 
 .PHONY: example-gen
 example-gen:
-	stack run uniter-example
+	stack build --test --no-run-tests --exec uniter-example
 
 .PHONY: example-dotall
 example-dotall:
