@@ -1,6 +1,7 @@
 module Uniter.Driver
-  ( ExtractErr (..)
-  , UniteResult (..)
+  ( UniteErr (..)
+  , UniteSuccess (..)
+  , UniteResult
   , uniteResult
   , quickUniteResult
   , driveUniterT
@@ -17,31 +18,42 @@ import Uniter.Graph (Graph, resolveVar)
 import Uniter.PreGraph (PreGraph (..))
 import Uniter.Process (ProcessErr, RebindMap, embedUniterT, extract, newProcessState, runProcessT)
 
-data ExtractErr = ExtractErr !BoundId !BoundId
-  deriving stock (Eq, Ord, Show)
+data UniteErr e g =
+    UniteErrProcess !(ProcessErr e)
+  | UniteErrExtract !BoundId !BoundId !RebindMap !(Graph g)
 
-instance Exception ExtractErr
+deriving instance (Eq e, Eq (Node g)) => Eq (UniteErr e g)
+deriving instance (Show e, Show (Node g)) => Show (UniteErr e g)
 
-data UniteResult e g u =
-    UniteResultProcessErr !(ProcessErr e)
-  | UniteResultExtractErr !BoundId !BoundId !RebindMap !(Graph g)
-  | UniteResultSuccess !BoundId !u !RebindMap !(Graph g)
+instance (Show e, Show (Node g), Typeable e, Typeable g) => Exception (UniteErr e g)
+
+-- data UniteMetaErr e g =
+--     UniteMetaErrAlign !e
+--   | UniteMetaErrDrive !(UniteErr e g)
+
+-- deriving instance (Eq e, Eq (Node g)) => Eq (UniteMetaErr e g)
+-- deriving instance (Show e, Show (Node g)) => Show (UniteMetaErr e g)
+
+-- instance (Show e, Show (Node g), Typeable e, Typeable g) => Exception (UniteMetaErr e g)
+
+data UniteSuccess g u = UniteSuccess !BoundId !u !RebindMap !(Graph g)
   deriving stock (Functor, Foldable, Traversable)
 
-deriving instance (Eq e, Eq (Node g), Eq u) => Eq (UniteResult e g u)
-deriving instance (Show e, Show (Node g), Show u) => Show (UniteResult e g u)
+deriving instance (Eq (Node g), Eq u) => Eq (UniteSuccess g u)
+deriving instance (Show (Node g), Show u) => Show (UniteSuccess g u)
+
+type UniteResult e g u = Either (UniteErr e g) (UniteSuccess g u)
 
 -- | Perform unification on a term in one go. -- NOTE It may be helpful to alias this function with the types filled in.
 uniteResult :: (Recursive t, Base t ~ f, Unitable g f m, Corecursive u, Base u ~ g, Alignable e g) => t -> m (PreGraph g, UniteResult e g u)
 uniteResult = driveUniterT . uniteTerm
 
-quickUniteResult :: (Recursive t, Base t ~ f, Unitable g f m, Corecursive u, Base u ~ g, Alignable e g, MonadThrow m, Show e, Typeable e) => t -> m u
+quickUniteResult :: (Recursive t, Base t ~ f, Unitable g f m, Corecursive u, Base u ~ g, Alignable e g, MonadThrow m, Show e, Show (Node g), Typeable e, Typeable g) => t -> m u
 quickUniteResult t = do
   r <- fmap snd (uniteResult t)
   case r of
-    UniteResultProcessErr pe -> throwM pe
-    UniteResultExtractErr bid xid _ _ -> throwM (ExtractErr bid xid)
-    UniteResultSuccess _ u _ _ -> pure u
+    Left e -> throwM e
+    Right (UniteSuccess _ u _ _) -> pure u
 
 driveUniterT :: (Monad m, Corecursive u, Base u ~ g, Alignable e g) => UniterT g m BoundId -> m (PreGraph g, UniteResult e g u)
 driveUniterT act = do
@@ -52,9 +64,9 @@ driveUniterT act = do
     (rebinds, graph) <- extract
     pure (bid, rebinds, graph)
   let res = case ea of
-        Left pe -> UniteResultProcessErr pe
+        Left pe -> Left (UniteErrProcess pe)
         Right (bid, rebinds, graph) ->
           case resolveVar bid graph of
-            Left xid -> UniteResultExtractErr bid xid rebinds graph
-            Right u -> UniteResultSuccess bid u rebinds graph
+            Left xid -> Left (UniteErrExtract bid xid rebinds graph)
+            Right u -> Right (UniteSuccess bid u rebinds graph)
   pure (pg, res)

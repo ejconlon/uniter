@@ -30,6 +30,7 @@ library
       Uniter.Core
       Uniter.Driver
       Uniter.Example
+      Uniter.Example.Complex
       Uniter.Example.Simple
       Uniter.FreeEnv
       Uniter.Graph

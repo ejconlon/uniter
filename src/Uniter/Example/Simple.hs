@@ -26,8 +26,8 @@ import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Text (Text)
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
-import Uniter (Alignable (..), ExtractErr (..), UnalignableErr (..), Unitable (..), UniteResult (..), addNode,
-               constrainEq, freshVar, uniteResult)
+import Uniter (Alignable (..), UnalignableErr (..), Unitable (..), addNode,
+               constrainEq, freshVar, uniteResult, UniteSuccess (..))
 import Uniter.FreeEnv (FreeEnv, FreeEnvMissingErr (..))
 import qualified Uniter.FreeEnv as UF
 import Uniter.Render (writeGraphDot, writePreGraphDot)
@@ -146,14 +146,10 @@ processVerbose name expr = runM go where
     (pg, res) <- uniteResult expr
     liftIO $ writePreGraphDot ("dot/" ++ name ++ "-initial.dot") pg
     case res of
-      UniteResultProcessErr pe -> do
-        liftIO $ putStrLn "--- Process failure"
-        throwM pe
-      UniteResultExtractErr bid xid rs g -> do
-        liftIO $ putStrLn ("--- Extract failure: " ++ show xid)
-        goVerbose bid rs g
-        throwM (ExtractErr bid xid)
-      UniteResultSuccess bid ty rs g -> do
+      Left e -> do
+        liftIO $ putStrLn "--- Failure"
+        throwM e
+      Right (UniteSuccess bid ty rs g) -> do
         liftIO $ putStrLn "--- Success"
         goVerbose bid rs g
         liftIO $ putStrLn "--- Final type: "
