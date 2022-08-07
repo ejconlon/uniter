@@ -25,6 +25,7 @@ data UniteResult e g u =
     UniteResultProcessErr !(ProcessErr e)
   | UniteResultExtractErr !BoundId !BoundId !RebindMap !(Graph g)
   | UniteResultSuccess !BoundId !u !RebindMap !(Graph g)
+  deriving stock (Functor, Foldable, Traversable)
 
 deriving instance (Eq e, Eq (Node g), Eq u) => Eq (UniteResult e g u)
 deriving instance (Show e, Show (Node g), Show u) => Show (UniteResult e g u)
