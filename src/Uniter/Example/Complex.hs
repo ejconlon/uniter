@@ -4,14 +4,14 @@ module Uniter.Example.Complex
   ( main
   ) where
 
+import Control.Monad.Except (MonadError (..))
 import Data.Functor.Foldable.TH (makeBaseFunctor)
-import Uniter (Alignable (..), UnalignableErr (..), Unitable (..), addNode, constrainEq, freshVar)
-import Data.These (These(..))
-import Uniter.Example.Simple (M)
-import qualified Uniter.FreeEnv as UF
-import Control.Monad.Except (MonadError(..))
-import Uniter.FreeEnv (FreeEnvMissingErr(..))
 import Data.Text (Text)
+import Data.These (These (..))
+import Uniter (Alignable (..), UnalignableErr (..), Unitable (..), addNode, constrainEq, freshVar)
+import Uniter.Example.Simple (M)
+import Uniter.FreeEnv (FreeEnvMissingErr (..))
+import qualified Uniter.FreeEnv as UF
 
 main :: IO ()
 main = pure ()
@@ -54,7 +54,7 @@ instance Alignable UnalignableErr TyF where
       (TyFunF xa xb, TyFunF ya yb) -> Right (TyFunF (These xa ya) (These xb yb))
       _ -> Left UnalignableErr
 
-instance Unitable TyF ExpF M where
+instance Unitable ExpF TyF M where
   unite = \case
     ExpIntF _ -> addNode TyIntF
     ExpAddF mi mj -> do

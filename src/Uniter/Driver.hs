@@ -12,7 +12,7 @@ import Control.Monad.Catch (MonadThrow (..))
 import Data.Functor.Foldable (Base, Corecursive, Recursive)
 import Data.Typeable (Typeable)
 import Uniter.Align (Alignable)
-import Uniter.Class (Unitable, newUniterState, preGraph, runUniterT, uniteTerm, UniterT)
+import Uniter.Class (Unitable, UniterT, newUniterState, preGraph, runUniterT, uniteTerm)
 import Uniter.Core (BoundId (..), Node)
 import Uniter.Graph (Graph, resolveVar)
 import Uniter.PreGraph (PreGraph (..))
@@ -45,10 +45,10 @@ deriving instance (Show (Node g), Show u) => Show (UniteSuccess g u)
 type UniteResult e g u = Either (UniteErr e g) (UniteSuccess g u)
 
 -- | Perform unification on a term in one go. -- NOTE It may be helpful to alias this function with the types filled in.
-uniteResult :: (Recursive t, Base t ~ f, Unitable g f m, Corecursive u, Base u ~ g, Alignable e g) => t -> m (PreGraph g, UniteResult e g u)
+uniteResult :: (Recursive t, Base t ~ f, Unitable f g m, Corecursive u, Base u ~ g, Alignable e g) => t -> m (PreGraph g, UniteResult e g u)
 uniteResult = driveUniterT . uniteTerm
 
-quickUniteResult :: (Recursive t, Base t ~ f, Unitable g f m, Corecursive u, Base u ~ g, Alignable e g, MonadThrow m, Show e, Show (Node g), Typeable e, Typeable g) => t -> m u
+quickUniteResult :: (Recursive t, Base t ~ f, Unitable f g m, Corecursive u, Base u ~ g, Alignable e g, MonadThrow m, Show e, Show (Node g), Typeable e, Typeable g) => t -> m u
 quickUniteResult t = do
   r <- fmap snd (uniteResult t)
   case r of

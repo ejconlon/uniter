@@ -100,14 +100,14 @@ freshVar = withEvent EventFreshVar
 --    this will almost always implement 'Alignable'
 -- 'f' is the expression type (typically representing EXPRESSIONS in your language)
 -- 'm' is the effect type (typically some reader/state/error)
-class (Traversable f, Traversable g, Monad m) => Unitable g f m | f -> g m where
+class (Traversable f, Traversable g, Monad m) => Unitable f g m | f -> g m where
   -- | Inspects the expression functor, performing effects to
   -- allocate fresh unification vars, introduce equalities, and add nodes to the graph,
   -- returning the ID associated with this value.
   unite :: f (UniterT g m BoundId) -> UniterT g m BoundId
 
 -- | Perform unification bottom-up on a 'Recursive' term.
-uniteTerm :: (Recursive t, Base t ~ f, Unitable g f m) => t -> UniterT g m BoundId
+uniteTerm :: (Recursive t, Base t ~ f, Unitable f g m) => t -> UniterT g m BoundId
 uniteTerm = cata unite
 
 recordEvent :: Event g -> PreGraph g -> PreGraph g

@@ -26,8 +26,8 @@ import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Text (Text)
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
-import Uniter (Alignable (..), UnalignableErr (..), Unitable (..), addNode,
-               constrainEq, freshVar, uniteResult, UniteSuccess (..))
+import Uniter (Alignable (..), UnalignableErr (..), Unitable (..), UniteSuccess (..), addNode, constrainEq, freshVar,
+               uniteResult)
 import Uniter.FreeEnv (FreeEnv, FreeEnvMissingErr (..))
 import qualified Uniter.FreeEnv as UF
 import Uniter.Render (writeGraphDot, writePreGraphDot)
@@ -73,7 +73,7 @@ newtype M a = M { unM :: ReaderT (FreeEnv Text) (ExceptT (FreeEnvMissingErr Text
 runM :: M a -> IO a
 runM m = runExceptT (runReaderT (unM m) UF.empty) >>= either throwIO pure
 
-instance Unitable TyF ExpF M where
+instance Unitable ExpF TyF M where
   -- Inspect our expression functor and perform unification
   unite = \case
     ExpConstF ->
