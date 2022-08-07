@@ -31,9 +31,9 @@ import Data.Typeable (Typeable)
 import IntLike.Map (IntLikeMap)
 import Lens.Micro (lens)
 import Uniter.Align (Alignable (..))
-import Uniter.Class (UniterState (..), UniterT, runUniterT)
 import Uniter.Core (BoundId (..), Event (..))
 import Uniter.Graph (Elem (..), Graph (..), elemTraversal)
+import Uniter.Monad (UniterState (..), UniterT, runUniterT)
 import Uniter.UnionMap (UnionEntry (..), UnionMap (..), UnionMapAddVal (..), UnionMapLens, UnionMapLookupVal (..),
                         UnionMapMergeVal (..), UnionMergeMany, addUnionMapLM, canonicalizeUnionMapLM, compactUnionMapLM,
                         emptyUnionMap, lookupUnionMapLM, mergeManyUnionMapLM)

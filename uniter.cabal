@@ -26,19 +26,22 @@ library
   exposed-modules:
       Uniter
       Uniter.Align
-      Uniter.Class
       Uniter.Core
-      Uniter.Driver
       Uniter.Example
       Uniter.Example.Complex
       Uniter.Example.Simple
       Uniter.FreeEnv
       Uniter.Graph
+      Uniter.Monad
       Uniter.PreGraph
       Uniter.Process
       Uniter.Render
+      Uniter.Reunitable.Class
+      Uniter.Reunitable.Driver
       Uniter.State
       Uniter.UnionMap
+      Uniter.Unitable.Class
+      Uniter.Unitable.Driver
   other-modules:
       Paths_uniter
   hs-source-dirs:

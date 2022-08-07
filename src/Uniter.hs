@@ -11,11 +11,12 @@ module Uniter
   , freshVar
   , uniteTerm
   , ProcessErr (..)
-  , module Uniter.Driver
+  , module Uniter.Unitable.Driver
   ) where
 
 import Uniter.Align (Alignable (..), UnalignableErr (..))
-import Uniter.Class (Unitable (..), UniterT, addNode, constrainAllEq, constrainEq, freshVar, uniteTerm)
 import Uniter.Core (BoundId (..))
-import Uniter.Driver
+import Uniter.Monad (UniterT, addNode, constrainAllEq, constrainEq, freshVar)
 import Uniter.Process (ProcessErr (..))
+import Uniter.Unitable.Class (Unitable (..), uniteTerm)
+import Uniter.Unitable.Driver

@@ -1,6 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 
-module Uniter.Class
+module Uniter.Monad
   ( UniterState (..)
   , newUniterState
   , UniterT
@@ -9,8 +9,6 @@ module Uniter.Class
   , constrainAllEq
   , addNode
   , freshVar
-  , Unitable (..)
-  , uniteTerm
   , preGraph
   ) where
 
@@ -21,7 +19,6 @@ import Control.Monad.State.Strict (MonadState (..), StateT (..), gets, mapStateT
 import Control.Monad.Trans (MonadTrans (..))
 import Control.Monad.Trans.State.Strict (liftCatch)
 import Data.Foldable (toList)
-import Data.Functor.Foldable (Base, Recursive (..))
 import Data.Sequence (Seq (..))
 import Uniter.Core (BoundId, Event (..), Node)
 import Uniter.PreGraph (PreElem (..), PreGraph (..))
@@ -95,26 +92,12 @@ addNode n = withEvent (EventAddNode n)
 freshVar :: Monad m => UniterT g m BoundId
 freshVar = withEvent EventFreshVar
 
--- | Describes the unification process for a particular expression functor 'f':
--- 'g' is the alignable functor (typically representing the TYPE of your expression 'f') -
---    this will almost always implement 'Alignable'
--- 'f' is the expression type (typically representing EXPRESSIONS in your language)
--- 'm' is the effect type (typically some reader/state/error)
-class (Traversable f, Traversable g, Monad m) => Unitable f g m | f -> g m where
-  -- | Inspects the expression functor, performing effects to
-  -- allocate fresh unification vars, introduce equalities, and add nodes to the graph,
-  -- returning the ID associated with this value.
-  unite :: f (UniterT g m BoundId) -> UniterT g m BoundId
-
--- | Perform unification bottom-up on a 'Recursive' term.
-uniteTerm :: (Recursive t, Base t ~ f, Unitable f g m) => t -> UniterT g m BoundId
-uniteTerm = cata unite
-
 recordEvent :: Event g -> PreGraph g -> PreGraph g
 recordEvent = \case
   EventAddNode n k -> UP.insert k (PreElemNode n)
   EventConstrainEq i j k -> UP.insert k (PreElemEq i j)
   EventFreshVar k -> UP.insert k PreElemFresh
 
+-- | Generate a 'PreGraph' (a 'Graph' with equality nodes) from the current set of events.
 preGraph :: Monad m => UniterT g m (PreGraph g)
 preGraph = fmap (foldr recordEvent UP.empty) (UniterT (gets usEvents))

@@ -8,10 +8,11 @@ import Control.Monad.Except (MonadError (..))
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Text (Text)
 import Data.These (These (..))
-import Uniter (Alignable (..), UnalignableErr (..), Unitable (..), addNode, constrainEq, freshVar)
+import Uniter (Alignable (..), UnalignableErr (..), addNode, constrainEq, freshVar)
 import Uniter.Example.Simple (M)
 import Uniter.FreeEnv (FreeEnvMissingErr (..))
 import qualified Uniter.FreeEnv as UF
+import Uniter.Reunitable.Class (Reunion (..), Reunitable (..))
 
 main :: IO ()
 main = pure ()
@@ -35,15 +36,15 @@ data Exp =
 
 makeBaseFunctor ''Exp
 
-data AnnExp =
+data AnnExp a =
     AnnExpInt !Int
-  | AnnExpAdd AnnExp AnnExp
-  | AnnExpIfZero AnnExp AnnExp AnnExp
+  | AnnExpAdd (AnnExp a) (AnnExp a)
+  | AnnExpIfZero (AnnExp a) (AnnExp a) (AnnExp a)
   | AnnExpVar !Text
-  | AnnExpApp AnnExp AnnExp
-  | AnnExpAbs !Text !Ty AnnExp
-  | AnnExpLet !Text !Ty AnnExp AnnExp
-  deriving stock (Eq, Ord, Show)
+  | AnnExpApp (AnnExp a) (AnnExp a)
+  | AnnExpAbs !Text !a (AnnExp a)
+  | AnnExpLet !Text !a (AnnExp a) (AnnExp a)
+  deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 makeBaseFunctor ''AnnExp
 
@@ -54,37 +55,48 @@ instance Alignable UnalignableErr TyF where
       (TyFunF xa xb, TyFunF ya yb) -> Right (TyFunF (These xa ya) (These xb yb))
       _ -> Left UnalignableErr
 
-instance Unitable ExpF TyF M where
-  unite = \case
-    ExpIntF _ -> addNode TyIntF
-    ExpAddF mi mj -> do
+instance Reunitable ExpF TyF AnnExp M where
+  reunite = \case
+    ExpIntF c -> do
       x <- addNode TyIntF
-      _ <- mi >>= constrainEq x
-      _ <- mj >>= constrainEq x
-      pure x
+      pure (Reunion x (AnnExpInt c))
+    ExpAddF mi mj -> do
+      Reunion i hi <- mi
+      Reunion j hj <- mj
+      x <- addNode TyIntF
+      _ <- constrainEq x i
+      _ <- constrainEq x j
+      pure (Reunion x (AnnExpAdd hi hj))
     ExpIfZeroF mi mj mk -> do
+      Reunion i hi <- mi
+      Reunion j hj <- mj
+      Reunion k hk <- mk
       x <- addNode TyIntF
       y <- freshVar
-      _ <- mi >>= constrainEq x
-      _ <- mj >>= constrainEq y
-      _ <- mk >>= constrainEq y
-      pure y
+      _ <- constrainEq x i
+      _ <- constrainEq y j
+      _ <- constrainEq y k
+      pure (Reunion y (AnnExpIfZero hi hj hk))
     ExpVarF n -> do
-      b <- UF.lookupM n
-      maybe (throwError (FreeEnvMissingErr n)) pure b
+      mv <- UF.lookupM n
+      case mv of
+        Nothing -> throwError (FreeEnvMissingErr n)
+        Just v -> pure (Reunion v (AnnExpVar n))
     ExpAppF mi mj -> do
-      i <- mi
-      j <- mj
+      Reunion i hi <- mi
+      Reunion j hj <- mj
       x <- freshVar
       y <- addNode (TyFunF j x)
       _ <- constrainEq y i
-      pure x
+      pure (Reunion x (AnnExpApp hi hj))
     ExpAbsF n mi -> do
       x <- freshVar
-      UF.insertM n x mi
+      Reunion y hy <- UF.insertM n x mi
+      pure (Reunion y (AnnExpAbs n y hy))
     ExpLetF n mi mj -> do
-      i <- mi
-      UF.insertM n i mj
+      Reunion i hi <- mi
+      Reunion y hy <- UF.insertM n i mj
+      pure (Reunion y (AnnExpLet n i hi hy))
 
 -- data ExpUniteErr = UniteErr UnalignableErr TyF
 
@@ -94,5 +106,5 @@ instance Unitable ExpF TyF M where
 -- expTy :: Exp -> M Ty
 -- expTy = undefined
 
--- annExp :: Exp -> N AnnExp
+-- annExp :: Exp -> M AnnExp
 -- annExp = undefined
