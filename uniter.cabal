@@ -38,6 +38,11 @@ library
       Uniter.Render
       Uniter.Reunitable.Class
       Uniter.Reunitable.Driver
+      Uniter.Scratch.Impl
+      Uniter.Scratch.ImplGeneric
+      Uniter.Scratch.Lang
+      Uniter.Scratch.LangGeneric
+      Uniter.Scratch.Types
       Uniter.State
       Uniter.UnionMap
       Uniter.Unitable.Class
@@ -68,7 +73,6 @@ library
       Rank2Types
       ScopedTypeVariables
       StandaloneDeriving
-      TemplateHaskell
       TupleSections
       TypeApplications
       TypeOperators
@@ -77,6 +81,7 @@ library
   build-depends:
       algebraic-graphs ==0.6.*
     , base >=4.12 && <5
+    , bifunctors
     , containers ==0.6.*
     , deepseq ==1.4.*
     , exceptions ==0.10.*
@@ -120,7 +125,6 @@ executable uniter-example
       Rank2Types
       ScopedTypeVariables
       StandaloneDeriving
-      TemplateHaskell
       TupleSections
       TypeApplications
       TypeOperators
@@ -129,6 +133,7 @@ executable uniter-example
   build-depends:
       algebraic-graphs ==0.6.*
     , base >=4.12 && <5
+    , bifunctors
     , containers ==0.6.*
     , deepseq ==1.4.*
     , exceptions ==0.10.*
@@ -176,7 +181,6 @@ test-suite uniter-test
       Rank2Types
       ScopedTypeVariables
       StandaloneDeriving
-      TemplateHaskell
       TupleSections
       TypeApplications
       TypeOperators
@@ -185,6 +189,7 @@ test-suite uniter-test
   build-depends:
       algebraic-graphs ==0.6.*
     , base >=4.12 && <5
+    , bifunctors
     , containers ==0.6.*
     , deepseq ==1.4.*
     , exceptions ==0.10.*

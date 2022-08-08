@@ -16,6 +16,7 @@ description: Please see the README on GitHub at <https://github.com/ejconlon/uni
 dependencies:
 - base >= 4.12 && < 5
 - algebraic-graphs >= 0.6 && < 0.7
+- bifunctors
 - containers >= 0.6 && < 0.7
 - deepseq >= 1.4 && < 1.5
 - exceptions >= 0.10 && < 0.11
@@ -52,7 +53,6 @@ default-extensions:
 - Rank2Types
 - ScopedTypeVariables
 - StandaloneDeriving
-- TemplateHaskell
 - TupleSections
 - TypeApplications
 - TypeOperators
