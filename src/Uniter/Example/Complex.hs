@@ -11,10 +11,7 @@ import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.These (These (..))
 import Uniter (Alignable (..), UnalignableErr (..))
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
-import Uniter.Reunitable.Core (Index, TmVar, embedSpecTm)
-
-main :: IO ()
-main = pure ()
+import Uniter.Reunitable.Core (Index, Quant, TmVar, embedSpecTm)
 
 data Ty =
     TyInt
@@ -23,17 +20,25 @@ data Ty =
 
 makeBaseFunctor ''Ty
 
+deriving stock instance Eq r => Eq (TyF r)
+deriving stock instance Ord r => Ord (TyF r)
+deriving stock instance Show r => Show (TyF r)
+
 data Exp =
-    ExpVar !TmVar
+    ExpFree !TmVar
   | ExpInt !Int
   | ExpAdd Exp Exp
   | ExpIfZero Exp Exp Exp
   | ExpApp Exp Exp
-  | ExpAbs !TmVar !Exp
-  | ExpLet !TmVar !Exp !Exp
+  | ExpAbs !TmVar !(Maybe (Quant TyF)) !Exp
+  | ExpLet !TmVar !(Maybe (Quant TyF)) !Exp !Exp
   deriving stock (Eq, Ord, Show)
 
 makeBaseFunctor ''Exp
+
+deriving stock instance Eq r => Eq (ExpF r)
+deriving stock instance Ord r => Ord (ExpF r)
+deriving stock instance Show r => Show (ExpF r)
 
 data AnnExp ty =
     AnnExpBound !Index
@@ -47,6 +52,10 @@ data AnnExp ty =
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 makeBaseFunctor ''AnnExp
+
+deriving stock instance (Eq ty, Eq r) => Eq (AnnExpF ty r)
+deriving stock instance (Ord ty, Ord r) => Ord (AnnExpF ty r)
+deriving stock instance (Show ty, Show r) => Show (AnnExpF ty r)
 
 instance Bifunctor AnnExpF where
   bimap = error "TODO"
@@ -64,15 +73,15 @@ instance Alignable UnalignableErr TyF where
       (TyFunF xa xb, TyFunF ya yb) -> Right (TyFunF (These xa ya) (These xb yb))
       _ -> Left UnalignableErr
 
-instance Reunitable ExpF AnnExpF Ty TyF where
+instance Reunitable ExpF AnnExpF TyF where
   reunite = \case
     ExpIntF c -> do
-      x <- reuniterAddNode TyIntF
+      x <- reuniterAddBaseTy TyIntF
       pure (x, embedSpecTm (AnnExpIntF c))
     ExpAddF mi mj -> do
       (i, si) <- mi
       (j, sj) <- mj
-      x <- reuniterAddNode TyIntF
+      x <- reuniterAddBaseTy TyIntF
       _ <- reuniterConstrainEq x i
       _ <- reuniterConstrainEq x j
       pure (x, embedSpecTm (AnnExpAddF si sj))
@@ -80,13 +89,13 @@ instance Reunitable ExpF AnnExpF Ty TyF where
       (i, si) <- mi
       (j, sj) <- mj
       (k, sk) <- mk
-      x <- reuniterAddNode TyIntF
+      x <- reuniterAddBaseTy TyIntF
       y <- reuniterFreshVar
       _ <- reuniterConstrainEq x i
       _ <- reuniterConstrainEq y j
       _ <- reuniterConstrainEq y k
       pure (y, embedSpecTm (AnnExpIfZeroF si sj sk))
-    ExpVarF n ->
+    ExpFreeF n ->
       let onFree = embedSpecTm (AnnExpFreeF n)
           onBound = embedSpecTm . AnnExpBoundF
       in reuniterResolveTmVar n onFree onBound
@@ -94,24 +103,19 @@ instance Reunitable ExpF AnnExpF Ty TyF where
       (i, si) <- mi
       (j, sj) <- mj
       x <- reuniterFreshVar
-      y <- reuniterAddNode (TyFunF j x)
+      y <- reuniterAddBaseTy (TyFunF j x)
       _ <- reuniterConstrainEq y i
       pure (x, embedSpecTm (AnnExpAppF si sj))
-    ExpAbsF n mi -> do
-      (y, sy) <- reuniterBindFreshTmVar n mi
+    ExpAbsF n _mq mi -> do
+      -- TODO use optional type annotation
+      x <- reuniterFreshVar
+      (y, sy) <- reuniterBindTmVar n x mi
       pure (y, embedSpecTm (AnnExpAbsF n y sy))
-    ExpLetF n mi mj -> do
+    ExpLetF n _mq mi mj -> do
+      -- TODO use optional type annotation
       (i, si) <- mi
       (y, sy) <- reuniterBindTmVar n i mj
       pure (y, embedSpecTm (AnnExpLetF n i si sy))
 
--- data ExpUniteErr = UniteErr UnalignableErr TyF
-
--- newtype N a = N { unN :: ReaderT (FreeEnv Text) (Except ExpUniteErr) a }
---   deriving newtype (Functor, Applicative, Monad, MonadReader (FreeEnv Text), MonadError ExpUnitErr)
-
--- expTy :: Exp -> M Ty
--- expTy = undefined
-
--- annExp :: Exp -> M AnnExp
--- annExp = undefined
+main :: IO ()
+main = pure ()
