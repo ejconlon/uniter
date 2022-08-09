@@ -4,6 +4,8 @@ import Control.Monad.IO.Class (liftIO)
 import Data.Bifunctor (bimap, first)
 import Data.Char (chr, ord)
 import Data.Semigroup (Max)
+import Data.Sequence (Seq (..))
+import qualified Data.Sequence as Seq
 import Data.Void (Void)
 import IntLike.Map (IntLikeMap)
 import qualified IntLike.Map as ILM
@@ -12,6 +14,9 @@ import qualified IntLike.Set as ILS
 import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
 import Uniter.Example.Simple (Ty (..), exampleExponential, exampleLinear, runM)
+import Uniter.Reunitable.Core (Index (..), Level (..), tupleToPair)
+import Uniter.Reunitable.OrderedMap (OrderedMap)
+import qualified Uniter.Reunitable.OrderedMap as OM
 import Uniter.UnionMap (Changed (..), UnionEquiv (..), UnionMap, UnionMapAddVal (..), UnionMapLookupVal (..),
                         UnionMapMergeVal (..), UnionMapTraceRes (..), UnionMergeOne, addUnionMapM, concatUnionMergeOne,
                         emptyUnionMap, equivUnionMapM, lookupUnionMapM, mergeOneUnionMapM, sizeUnionMap, traceUnionMap,
@@ -156,6 +161,57 @@ testUmUnit = testGroup "UM unit"
   , testUmTail
   ]
 
+testOmUnit :: TestTree
+testOmUnit = testUnit "OM unit" $ do
+  -- []
+  let x = OM.empty :: OrderedMap Char Int
+  OM.level x === Level 0
+  OM.order x === Empty
+  OM.toList x === []
+  OM.fromList [] === x
+  OM.lookup 'a' x === Nothing
+  OM.lookup 'b' x === Nothing
+  OM.unsnoc x === Nothing
+  -- [(a, 1)]
+  let y = OM.snoc x 'a' 1
+  OM.level y === Level 1
+  OM.order y === Seq.fromList [(Index 0, 'a', 1)]
+  OM.toList y === [('a', 1)]
+  OM.fromList [('a', 1)] === y
+  OM.lookup 'a' y === Just (Index 0, 1)
+  OM.lookup 'b' y === Nothing
+  OM.unsnoc y === Just (x, 'a', 1)
+  -- [(a, 1), (b, 2)]
+  let z = OM.snoc y 'b' 2
+  OM.level z === Level 2
+  OM.order z === Seq.fromList [(Index 1, 'a', 1), (Index 0, 'b', 2)]
+  OM.toList z === [('a', 1), ('b', 2)]
+  OM.fromList [('a', 1), ('b', 2)] === z
+  OM.lookup 'a' z === Just (Index 1, 1)
+  OM.lookup 'b' z === Just (Index 0, 2)
+  OM.unsnoc z === Just (y, 'b', 2)
+  -- [(a, 1), (b, 2), (a, 3)]
+  let w = OM.snoc z 'a' 3
+  OM.level w === Level 3
+  OM.order w === Seq.fromList [(Index 1, 'b', 2), (Index 0, 'a', 3)]
+  OM.toList w === [('a', 1), ('b', 2), ('a', 3)]
+  OM.fromList [('a', 1), ('b', 2), ('a', 3)] === w
+  OM.lookup 'a' w === Just (Index 0, 3)
+  OM.lookup 'b' w === Just (Index 1, 2)
+  OM.unsnoc w === Just (z, 'a', 3)
+  -- [(a, 1), (b, 2), (a, 3), (a, 4)]
+  let v = OM.snoc w 'a' 4
+  OM.level v === Level 4
+  OM.order v === Seq.fromList [(Index 2, 'b', 2), (Index 0, 'a', 4)]
+  OM.toList v === [('a', 1), ('b', 2), ('a', 3), ('a', 4)]
+  OM.fromList [('a', 1), ('b', 2), ('a', 3), ('a', 4)] === v
+  OM.lookup 'a' v === Just (Index 0, 4)
+  OM.lookup 'b' v === Just (Index 2, 2)
+  OM.unsnoc v === Just (w, 'a', 4)
+  -- snoc all
+  let v' = OM.snocAll y (Seq.fromList (fmap tupleToPair [('b', 2), ('a', 3), ('a', 4)]))
+  v' === v
+
 testExample :: TestTree
 testExample = testUnit "example" $ do
   let expLinTy = TyPair TyConst TyConst
@@ -168,5 +224,6 @@ testExample = testUnit "example" $ do
 main :: IO ()
 main = testMain $ \_ -> testGroup "Uniter"
   [ testUmUnit
+  , testOmUnit
   , testExample
   ]
