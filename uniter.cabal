@@ -79,7 +79,7 @@ library
   build-depends:
       algebraic-graphs ==0.6.*
     , base >=4.12 && <5
-    , bifunctors
+    , bifunctors ==5.5.*
     , containers ==0.6.*
     , deepseq ==1.4.*
     , exceptions ==0.10.*
@@ -131,7 +131,7 @@ executable uniter-example
   build-depends:
       algebraic-graphs ==0.6.*
     , base >=4.12 && <5
-    , bifunctors
+    , bifunctors ==5.5.*
     , containers ==0.6.*
     , deepseq ==1.4.*
     , exceptions ==0.10.*
@@ -187,7 +187,7 @@ test-suite uniter-test
   build-depends:
       algebraic-graphs ==0.6.*
     , base >=4.12 && <5
-    , bifunctors
+    , bifunctors ==5.5.*
     , containers ==0.6.*
     , deepseq ==1.4.*
     , exceptions ==0.10.*

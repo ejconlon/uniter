@@ -4,9 +4,8 @@ module Uniter.Example.Complex
   ( main
   ) where
 
-import Data.Bifoldable (Bifoldable (..))
-import Data.Bifunctor (Bifunctor (..))
-import Data.Bitraversable (Bitraversable (..))
+import Control.Monad ((>=>))
+import Data.Bifunctor.TH (deriveBifoldable, deriveBifunctor, deriveBitraversable)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.These (These (..))
 import Uniter (Alignable (..), UnalignableErr (..))
@@ -57,14 +56,9 @@ deriving stock instance (Eq ty, Eq r) => Eq (AnnExpF ty r)
 deriving stock instance (Ord ty, Ord r) => Ord (AnnExpF ty r)
 deriving stock instance (Show ty, Show r) => Show (AnnExpF ty r)
 
-instance Bifunctor AnnExpF where
-  bimap = error "TODO"
-
-instance Bifoldable AnnExpF where
-  bifoldr = error "TODO"
-
-instance Bitraversable AnnExpF where
-  bitraverse = error "TODO"
+deriveBifunctor ''AnnExpF
+deriveBifoldable ''AnnExpF
+deriveBitraversable ''AnnExpF
 
 instance Alignable UnalignableErr TyF where
   align x y =
@@ -106,16 +100,15 @@ instance Reunitable ExpF AnnExpF TyF where
       y <- reuniterAddBaseTy (TyFunF j x)
       _ <- reuniterConstrainEq y i
       pure (x, embedSpecTm (AnnExpAppF si sj))
-    ExpAbsF n _mq mi -> do
-      -- TODO use optional type annotation
-      x <- reuniterFreshVar
+    ExpAbsF n mq mi -> do
+      x <- maybe reuniterFreshVar reuniterAddQuant mq
       (y, sy) <- reuniterBindTmVar n x mi
       pure (y, embedSpecTm (AnnExpAbsF n y sy))
-    ExpLetF n _mq mi mj -> do
-      -- TODO use optional type annotation
+    ExpLetF n mq mi mj -> do
       (i, si) <- mi
-      (y, sy) <- reuniterBindTmVar n i mj
-      pure (y, embedSpecTm (AnnExpLetF n i si sy))
+      i' <- maybe (pure i) (reuniterAddQuant >=> reuniterConstrainEq i) mq
+      (y, sy) <- reuniterBindTmVar n i' mj
+      pure (y, embedSpecTm (AnnExpLetF n i' si sy))
 
 main :: IO ()
 main = pure ()
