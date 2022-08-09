@@ -1,20 +1,9 @@
-{-# LANGUAGE UndecidableInstances #-}
-
 module Uniter.Reunitable.Class
-  ( Reunion (..)
-  , Reunitable (..)
+  ( Reunitable (..)
   ) where
 
 import Uniter.Core (BoundId)
-import Uniter.Monad (UniterT)
+import Uniter.Reunitable.Monad (ReuniterM)
 
-data Reunion h = Reunion
-  { reunionTy :: !BoundId
-  , reunionTm :: !(h BoundId)
-  }
-
-deriving instance Eq (h BoundId) => Eq (Reunion h)
-deriving instance Show (h BoundId) => Show (Reunion h)
-
-class (Traversable f, Traversable g, Traversable h, Monad m) => Reunitable f g h m | f -> g h m where
-  reunite :: f (UniterT g m (Reunion h)) -> UniterT g m (Reunion h)
+class (Traversable f, Traversable g, Traversable h) => Reunitable f h e u g | f -> h e u g where
+  reunite :: f (ReuniterM e u g (BoundId, h BoundId)) -> ReuniterM e u g (BoundId, h BoundId)

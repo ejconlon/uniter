@@ -12,7 +12,6 @@ import Uniter (Alignable (..), UnalignableErr (..), addNode, constrainEq, freshV
 import Uniter.Example.Simple (M)
 import Uniter.FreeEnv (FreeEnvMissingErr (..))
 import qualified Uniter.FreeEnv as UF
-import Uniter.Reunitable.Class (Reunion (..), Reunitable (..))
 
 main :: IO ()
 main = pure ()
@@ -55,48 +54,48 @@ instance Alignable UnalignableErr TyF where
       (TyFunF xa xb, TyFunF ya yb) -> Right (TyFunF (These xa ya) (These xb yb))
       _ -> Left UnalignableErr
 
-instance Reunitable ExpF TyF AnnExp M where
-  reunite = \case
-    ExpIntF c -> do
-      x <- addNode TyIntF
-      pure (Reunion x (AnnExpInt c))
-    ExpAddF mi mj -> do
-      Reunion i hi <- mi
-      Reunion j hj <- mj
-      x <- addNode TyIntF
-      _ <- constrainEq x i
-      _ <- constrainEq x j
-      pure (Reunion x (AnnExpAdd hi hj))
-    ExpIfZeroF mi mj mk -> do
-      Reunion i hi <- mi
-      Reunion j hj <- mj
-      Reunion k hk <- mk
-      x <- addNode TyIntF
-      y <- freshVar
-      _ <- constrainEq x i
-      _ <- constrainEq y j
-      _ <- constrainEq y k
-      pure (Reunion y (AnnExpIfZero hi hj hk))
-    ExpVarF n -> do
-      mv <- UF.lookupM n
-      case mv of
-        Nothing -> throwError (FreeEnvMissingErr n)
-        Just v -> pure (Reunion v (AnnExpVar n))
-    ExpAppF mi mj -> do
-      Reunion i hi <- mi
-      Reunion j hj <- mj
-      x <- freshVar
-      y <- addNode (TyFunF j x)
-      _ <- constrainEq y i
-      pure (Reunion x (AnnExpApp hi hj))
-    ExpAbsF n mi -> do
-      x <- freshVar
-      Reunion y hy <- UF.insertM n x mi
-      pure (Reunion y (AnnExpAbs n y hy))
-    ExpLetF n mi mj -> do
-      Reunion i hi <- mi
-      Reunion y hy <- UF.insertM n i mj
-      pure (Reunion y (AnnExpLet n i hi hy))
+-- instance Reunitable ExpF TyF AnnExp M where
+--   reunite = \case
+--     ExpIntF c -> do
+--       x <- addNode TyIntF
+--       pure (Reunion x (AnnExpInt c))
+--     ExpAddF mi mj -> do
+--       Reunion i hi <- mi
+--       Reunion j hj <- mj
+--       x <- addNode TyIntF
+--       _ <- constrainEq x i
+--       _ <- constrainEq x j
+--       pure (Reunion x (AnnExpAdd hi hj))
+--     ExpIfZeroF mi mj mk -> do
+--       Reunion i hi <- mi
+--       Reunion j hj <- mj
+--       Reunion k hk <- mk
+--       x <- addNode TyIntF
+--       y <- freshVar
+--       _ <- constrainEq x i
+--       _ <- constrainEq y j
+--       _ <- constrainEq y k
+--       pure (Reunion y (AnnExpIfZero hi hj hk))
+--     ExpVarF n -> do
+--       mv <- UF.lookupM n
+--       case mv of
+--         Nothing -> throwError (FreeEnvMissingErr n)
+--         Just v -> pure (Reunion v (AnnExpVar n))
+--     ExpAppF mi mj -> do
+--       Reunion i hi <- mi
+--       Reunion j hj <- mj
+--       x <- freshVar
+--       y <- addNode (TyFunF j x)
+--       _ <- constrainEq y i
+--       pure (Reunion x (AnnExpApp hi hj))
+--     ExpAbsF n mi -> do
+--       x <- freshVar
+--       Reunion y hy <- UF.insertM n x mi
+--       pure (Reunion y (AnnExpAbs n y hy))
+--     ExpLetF n mi mj -> do
+--       Reunion i hi <- mi
+--       Reunion y hy <- UF.insertM n i mj
+--       pure (Reunion y (AnnExpLet n i hi hy))
 
 -- data ExpUniteErr = UniteErr UnalignableErr TyF
 

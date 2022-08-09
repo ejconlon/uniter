@@ -37,11 +37,12 @@ library
       Uniter.Process
       Uniter.Render
       Uniter.Reunitable.Class
+      Uniter.Reunitable.Core
       Uniter.Reunitable.Driver
+      Uniter.Reunitable.Monad
+      Uniter.Reunitable.OrderedMap
       Uniter.Scratch.Impl
-      Uniter.Scratch.ImplGeneric
       Uniter.Scratch.Lang
-      Uniter.Scratch.LangGeneric
       Uniter.Scratch.Types
       Uniter.State
       Uniter.UnionMap
