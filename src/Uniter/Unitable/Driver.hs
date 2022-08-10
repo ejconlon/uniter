@@ -53,7 +53,7 @@ driveUniteResult :: (Corecursive u, Base u ~ g, Alignable e g) => ReuniterM g Un
 driveUniteResult act =
   let fm = Map.empty
       uniq = toEnum 0
-      pg = fromRight (error "bad program") (fst (runReuniterM (act *> preGraph) (newReuniterEnv fm) (newReuniterState uniq)))
+      pg = fromRight (error "impossible") (fst (runReuniterM (act *> preGraph) (newReuniterEnv fm) (newReuniterState uniq)))
       (ea, _) = flip runProcessM (newProcessState uniq) $ do
         bid <- embedReuniterM fm act
         (rebinds, graph) <- extract

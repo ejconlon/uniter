@@ -2,10 +2,6 @@
 
 module Uniter.Core
   ( UniqueId (..)
-  -- , MetaVar (..)
-  -- , SkolemVar (..)
-  -- , SynVar (..)
-  -- , synVarUniqueId
   , Node
   , Event (..)
   , Index (..)
@@ -47,28 +43,6 @@ import Data.Text (Text)
 newtype UniqueId = UniqueId { unUniqueId :: Int }
   deriving stock (Show)
   deriving newtype (Eq, Ord, Enum)
-
--- -- | A meta variable representing an unknown type
--- newtype MetaVar = MetaVar { unMetaVar :: UniqueId }
---   deriving stock (Show)
---   deriving newtype (Eq, Ord, Enum)
-
--- -- | A Skolem variable representing a type bound by a forall
--- data SkolemVar = SkolemVar
---   { svUnique :: !UniqueId
---   , svName :: !TyVar
---   } deriving stock (Eq, Ord, Show)
-
--- -- | A "synthetic" variable representing one of the two var types
--- data SynVar =
---     SynVarMeta !MetaVar
---   | SynVarSkolem !SkolemVar
---   deriving stock (Eq, Ord, Show)
-
--- synVarUniqueId :: SynVar -> UniqueId
--- synVarUniqueId = \case
---   SynVarMeta (MetaVar u) -> u
---   SynVarSkolem (SkolemVar u _) -> u
 
 -- | A 'Node' is a structure with all the holes filled with 'UniqueId's.
 type Node g = g UniqueId
@@ -115,6 +89,12 @@ data ForAll a = ForAll
   { forAllBinders :: !(Seq TyVar)
   , forAllBody :: !a
   } deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
+
+-- -- | Something with existentially quantified type variables
+-- data Exists a = Exists
+--   { existsBinders :: !(Seq TyVar)
+--   , existsBody :: !a
+--   } deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 -- | A strict tuple
 data Pair k v = Pair
@@ -235,6 +215,7 @@ instance Functor g => Corecursive (GenTy g) where
 data Quant (g :: Type -> Type) =
     QuantBare !(GenTy g)
   | QuantForAll !(ForAll (GenTy g))
+  -- | QuantExists !(Exists (GenTy g))
 
 deriving stock instance Eq (g (GenTy g)) => (Eq (Quant g))
 deriving stock instance Ord (g (GenTy g)) => (Ord (Quant g))
@@ -242,6 +223,9 @@ deriving stock instance Show (g (GenTy g)) => (Show (Quant g))
 
 forAllQuant :: Seq TyVar -> GenTy g -> Quant g
 forAllQuant tyvs gt = if Seq.null tyvs then QuantBare gt else QuantForAll (ForAll tyvs gt)
+
+-- existsQuant :: Seq TyVar -> GenTy g -> Quant g
+-- existsQuant tyvs gt = if Seq.null tyvs then QuantBare gt else QuantExists (Exists tyvs gt)
 
 data DummyAnnTm a r = DummyAnnTm
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
