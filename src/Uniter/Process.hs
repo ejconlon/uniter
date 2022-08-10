@@ -27,9 +27,10 @@ import qualified Data.Sequence as Seq
 import Data.These (These (..))
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
+import IntLike.Map (IntLikeMap)
 import Lens.Micro (lens)
 import Uniter.Align (Alignable (..))
-import Uniter.Core (Event (..), MetaVar (..), Quant, SynVar (..), TmVar, UniqueId)
+import Uniter.Core (Event (..), Quant, TmVar, UniqueId (..))
 import Uniter.Graph (Elem (..), Graph (..), elemTraversal)
 import Uniter.Reunitable.Monad (ReuniterErr, ReuniterM, ReuniterState (..), newReuniterEnv, newReuniterState,
                                 runReuniterM)
@@ -37,11 +38,11 @@ import Uniter.UnionMap (UnionEntry (..), UnionMap (..), UnionMapAddVal (..), Uni
                         UnionMapMergeVal (..), UnionMergeMany, addUnionMapLM, canonicalizeUnionMapLM, compactUnionMapLM,
                         emptyUnionMap, lookupUnionMapLM, mergeManyUnionMapLM)
 
-type RebindMap = Map SynVar SynVar
+type RebindMap = IntLikeMap UniqueId UniqueId
 
 data ProcessErr e =
-    ProcessErrDuplicate !SynVar
-  | ProcessErrMissing !SynVar
+    ProcessErrDuplicate !UniqueId
+  | ProcessErrMissing !UniqueId
   | ProcessErrReuniter !ReuniterErr
   | ProcessErrEmbed !e
   deriving stock (Eq, Ord, Show, Typeable)
@@ -50,13 +51,13 @@ instance (Show e, Typeable e) => Exception (ProcessErr e)
 
 data ProcessState g = ProcessState
   { psUnique :: !UniqueId
-  , psUnionMap :: !(UnionMap SynVar (Elem g))
+  , psUnionMap :: !(UnionMap UniqueId (Elem g))
   }
 
-deriving stock instance Eq (g SynVar) => Eq (ProcessState g)
-deriving stock instance Show (g SynVar) => Show (ProcessState g)
+deriving stock instance Eq (g UniqueId) => Eq (ProcessState g)
+deriving stock instance Show (g UniqueId) => Show (ProcessState g)
 
-psUnionMapL :: UnionMapLens (ProcessState g) SynVar (Elem g)
+psUnionMapL :: UnionMapLens (ProcessState g) UniqueId (Elem g)
 psUnionMapL = lens psUnionMap (\ps um -> ps { psUnionMap = um })
 
 newProcessState :: UniqueId -> ProcessState g
@@ -100,7 +101,7 @@ canonicalize = state canonicalizeOnState
 extract :: Traversable g => ProcessM e g (RebindMap, Graph g)
 extract = state extractOnState
 
-lookupP :: SynVar -> ProcessM e g (SynVar, Elem g)
+lookupP :: UniqueId -> ProcessM e g (UniqueId, Elem g)
 lookupP i = do
   val <- lookupUnionMapLM psUnionMapL i
   case val of
@@ -111,8 +112,8 @@ data Duo a = Duo !a !a
   deriving stock (Eq, Show, Functor, Foldable, Traversable)
 
 data Item = Item
-  { itemChildren :: !(Duo SynVar)
-  , itemRoot :: !SynVar
+  { itemChildren :: !(Duo UniqueId)
+  , itemRoot :: !UniqueId
   } deriving stock (Eq, Show)
 
 -- Effect used entirely within 'alignMerge'
@@ -125,8 +126,10 @@ runAlignM al b = fmap (\((a, w), s) -> (a, s, w)) (runExcept (runStateT (runWrit
 alignElems :: Alignable e g => Elem g -> Elem g -> AlignM e (Elem g)
 alignElems da db =
   case (da, db) of
-    (ElemFresh, _) -> pure db
-    (_, ElemFresh) -> pure da
+    (ElemSkolem _, _) -> error "TODO"
+    (_, ElemSkolem _) -> error "TODO"
+    (ElemMeta, _) -> pure db
+    (_, ElemMeta) -> pure da
     (ElemNode na, ElemNode nb) -> do
       case align na nb of
         Left e -> throwError e
@@ -137,7 +140,7 @@ alignElems da db =
               That b -> pure b
               These a b -> do
                 let duo = Duo a b
-                root <- fmap (SynVarMeta . MetaVar) (state (\x -> (x, succ x)))
+                root <- state (\x -> (x, succ x))
                 let item = Item duo root
                 tell (Seq.singleton item)
                 pure root
@@ -149,7 +152,6 @@ alignMerge b mdx (Duo di dj) = res where
   res = fmap (\(v, s, w) -> ((w, s), v)) (runAlignM body b)
   body = do
     case mdx of
-      -- TODO check that skolem vars align with nothing
       Just dx -> do
         dy <- alignElems dx di
         alignElems dy dj
@@ -164,14 +166,14 @@ mergeP (Item children root) = do
     UnionMapMergeValEmbed e -> throwError (ProcessErrEmbed e)
     UnionMapMergeValMerged _ _ (r, i) -> modify' (\st -> st { psUnique = i }) $> r
 
-freshP :: ProcessM e g SynVar
-freshP = state (\st -> let uniq = psUnique st in (SynVarMeta (MetaVar uniq), st { psUnique = succ uniq }))
+freshP :: ProcessM e g UniqueId
+freshP = state (\st -> let uniq = psUnique st in (uniq, st { psUnique = succ uniq }))
 
 constrainP :: Alignable e g => Item -> ProcessM e g ()
 constrainP it = do
   -- NOTE contract is that the root will not have been referenced before,
   -- so we have to add it to the graph when we see it
-  defineP ElemFresh (itemRoot it)
+  defineP ElemMeta (itemRoot it)
   constrainRecP (Seq.singleton it)
 
 constrainRecP :: Alignable e g => Seq Item -> ProcessM e g ()
@@ -180,10 +182,10 @@ constrainRecP = \case
     it :<| rest -> do
       newIts <- mergeP it
       -- see note in emitP
-      for_ newIts $ \newIt -> defineP ElemFresh (itemRoot newIt)
+      for_ newIts $ \newIt -> defineP ElemMeta (itemRoot newIt)
       constrainRecP (newIts <> rest)
 
-defineP :: Elem g -> SynVar -> ProcessM e g ()
+defineP :: Elem g -> UniqueId -> ProcessM e g ()
 defineP d i = do
   val <- addUnionMapLM psUnionMapL i d
   case val of
@@ -194,7 +196,8 @@ handleEvent :: Alignable e g => Event g -> ProcessM e g ()
 handleEvent = \case
   EventAddNode n k -> defineP (ElemNode n) k
   EventConstrainEq i j k -> constrainP (Item (Duo i j) k)
-  EventFreshVar k -> defineP ElemFresh k
+  EventNewMetaVar k -> defineP ElemMeta k
+  EventNewSkolemVar tyv k -> defineP (ElemSkolem tyv) k
 
 embedReuniterM :: Alignable e g => Map TmVar (Quant g) -> ReuniterM g a -> ProcessM e g a
 embedReuniterM fm m = do

@@ -10,36 +10,37 @@ module Uniter.PreGraph
   , lookup
   ) where
 
-import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
+import IntLike.Map (IntLikeMap)
+import qualified IntLike.Map as ILM
 import Prelude hiding (lookup)
-import Uniter.Core (Node, SynVar (..))
+import Uniter.Core (Node, TyVar, UniqueId (..))
 
 data PreElem g =
     PreElemNode !(Node g)
-  | PreElemEq !SynVar !SynVar
-  | PreElemFresh
+  | PreElemEq !UniqueId !UniqueId
+  | PreElemMeta
+  | PreElemSkolem !TyVar
 
-deriving stock instance Eq (g SynVar) => Eq (PreElem g)
-deriving stock instance Ord (g SynVar) => Ord (PreElem g)
-deriving stock instance Show (g SynVar) => Show (PreElem g)
+deriving stock instance Eq (Node g) => Eq (PreElem g)
+deriving stock instance Ord (Node g) => Ord (PreElem g)
+deriving stock instance Show (Node g) => Show (PreElem g)
 
-newtype PreGraph g = PreGraph { unPreGraph :: Map SynVar (PreElem g) }
+newtype PreGraph g = PreGraph { unPreGraph :: IntLikeMap UniqueId (PreElem g) }
 
 deriving newtype instance Eq (Node g) => Eq (PreGraph g)
 deriving stock instance Show (Node g) => Show (PreGraph g)
 
 empty :: PreGraph g
-empty = PreGraph Map.empty
+empty = PreGraph ILM.empty
 
-toList :: PreGraph g -> [(SynVar, PreElem g)]
-toList = Map.toList . unPreGraph
+toList :: PreGraph g -> [(UniqueId, PreElem g)]
+toList = ILM.toList . unPreGraph
 
-fromList :: [(SynVar, PreElem g)] -> PreGraph g
-fromList = PreGraph . Map.fromList
+fromList :: [(UniqueId, PreElem g)] -> PreGraph g
+fromList = PreGraph . ILM.fromList
 
-insert :: SynVar -> PreElem g -> PreGraph g -> PreGraph g
-insert x y = PreGraph . Map.insert x y . unPreGraph
+insert :: UniqueId -> PreElem g -> PreGraph g -> PreGraph g
+insert x y = PreGraph . ILM.insert x y . unPreGraph
 
-lookup :: SynVar -> PreGraph g -> Maybe (PreElem g)
-lookup x = Map.lookup x . unPreGraph
+lookup :: UniqueId -> PreGraph g -> Maybe (PreElem g)
+lookup x = ILM.lookup x . unPreGraph

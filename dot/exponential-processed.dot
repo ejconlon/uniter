@@ -1,10 +1,10 @@
 digraph 
 {
-  "10" [label="Meta 10: Node TyPairF 15 16"]
-  "11" [label="Meta 11: Node TyPairF 16 16"]
-  "12" [label="Meta 12: Node TyPairF 16 11"]
-  "15" [label="Meta 15: Node TyConstF"]
-  "16" [label="Meta 16: Node TyPairF 15 15"]
+  "10" [label="10: Node TyPairF 15 16"]
+  "11" [label="11: Node TyPairF 16 16"]
+  "12" [label="12: Node TyPairF 16 11"]
+  "15" [label="15: Node TyConstF"]
+  "16" [label="16: Node TyPairF 15 15"]
   "10" -> "15"
   "10" -> "16"
   "11" -> "16"

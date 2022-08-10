@@ -2,10 +2,10 @@
 
 module Uniter.Core
   ( UniqueId (..)
-  , MetaVar (..)
-  , SkolemVar (..)
-  , SynVar (..)
-  , synVarUniqueId
+  -- , MetaVar (..)
+  -- , SkolemVar (..)
+  -- , SynVar (..)
+  -- , synVarUniqueId
   , Node
   , Event (..)
   , Index (..)
@@ -48,35 +48,37 @@ newtype UniqueId = UniqueId { unUniqueId :: Int }
   deriving stock (Show)
   deriving newtype (Eq, Ord, Enum)
 
--- | A meta variable representing an unknown type
-newtype MetaVar = MetaVar { unMetaVar :: UniqueId }
-  deriving stock (Show)
-  deriving newtype (Eq, Ord, Enum)
+-- -- | A meta variable representing an unknown type
+-- newtype MetaVar = MetaVar { unMetaVar :: UniqueId }
+--   deriving stock (Show)
+--   deriving newtype (Eq, Ord, Enum)
 
--- | A Skolem variable representing a type bound by a forall
-data SkolemVar = SkolemVar
-  { svUnique :: !UniqueId
-  , svName :: !TyVar
-  } deriving stock (Eq, Ord, Show)
+-- -- | A Skolem variable representing a type bound by a forall
+-- data SkolemVar = SkolemVar
+--   { svUnique :: !UniqueId
+--   , svName :: !TyVar
+--   } deriving stock (Eq, Ord, Show)
 
--- | A "synthetic" variable representing one of the two var types
-data SynVar =
-    SynVarMeta !MetaVar
-  | SynVarSkolem !SkolemVar
-  deriving stock (Eq, Ord, Show)
+-- -- | A "synthetic" variable representing one of the two var types
+-- data SynVar =
+--     SynVarMeta !MetaVar
+--   | SynVarSkolem !SkolemVar
+--   deriving stock (Eq, Ord, Show)
 
-synVarUniqueId :: SynVar -> UniqueId
-synVarUniqueId = \case
-  SynVarMeta (MetaVar u) -> u
-  SynVarSkolem (SkolemVar u _) -> u
+-- synVarUniqueId :: SynVar -> UniqueId
+-- synVarUniqueId = \case
+--   SynVarMeta (MetaVar u) -> u
+--   SynVarSkolem (SkolemVar u _) -> u
 
--- | A 'Node' is a structure with all the holes filled with 'SynVar's.
-type Node g = g SynVar
+-- | A 'Node' is a structure with all the holes filled with 'UniqueId's.
+type Node g = g UniqueId
 
+-- | An 'Event' can be processed
 data Event g =
-    EventAddNode !(Node g) !SynVar
-  | EventConstrainEq !SynVar !SynVar !SynVar
-  | EventFreshVar !SynVar
+    EventAddNode !(Node g) !UniqueId
+  | EventConstrainEq !UniqueId !UniqueId !UniqueId
+  | EventNewMetaVar !UniqueId
+  | EventNewSkolemVar !TyVar !UniqueId
 
 deriving instance Eq (Node g) => Eq (Event g)
 deriving instance Ord (Node g) => Ord (Event g)

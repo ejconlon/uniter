@@ -26,8 +26,8 @@ import Data.Bifunctor (first)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Sequence (Seq (..))
-import Uniter.Core (Event (..), ForAll (..), GenTy (..), GenTyF (..), Index, MetaVar (..), Node, Pair (..), Quant (..),
-                    SkolemVar (..), SpecTm, SynVar (..), TmVar, TyVar, UniqueId (..), Var (..), bindSpecTm)
+import Uniter.Core (Event (..), ForAll (..), GenTy (..), GenTyF (..), Index, Node, Pair (..), Quant (..), SpecTm, TmVar,
+                    TyVar, UniqueId (..), Var (..), bindSpecTm)
 import Uniter.OrderedMap (OrderedMap)
 import qualified Uniter.OrderedMap as OM
 import Uniter.PreGraph (PreElem (..), PreGraph (..))
@@ -36,7 +36,7 @@ import qualified Uniter.PreGraph as UP
 data ReuniterEnv g = ReuniterEnv
   { reTmFree :: Map TmVar (Quant g)
   -- ^ Map of tm var to type definition (static)
-  , reBound :: OrderedMap Var SynVar
+  , reBound :: OrderedMap Var UniqueId
   -- ^ Map of var to type metavars (scoped)
   }
 
@@ -77,49 +77,49 @@ allocId = state $ \(ReuniterState x y) -> (x, ReuniterState (succ x) y)
 addEvent :: Event g -> ReuniterM g ()
 addEvent ev = ReuniterM $ modify' $ \(ReuniterState x y) -> ReuniterState x (y :|> ev)
 
-withEvent :: (UniqueId -> (SynVar, Event g)) -> ReuniterM g SynVar
+withEvent :: (UniqueId -> Event g) -> ReuniterM g UniqueId
 withEvent f = do
   k <- allocId
-  let (v, ev) = f k
+  let ev = f k
   addEvent ev
-  pure v
+  pure k
 
-constrainEq :: SynVar -> SynVar -> ReuniterM g SynVar
-constrainEq i j = withEvent (\u -> let v = SynVarMeta (MetaVar u) in (v, EventConstrainEq i j v))
+constrainEq :: UniqueId -> UniqueId -> ReuniterM g UniqueId
+constrainEq i j = withEvent (EventConstrainEq i j)
 
-addBaseTy :: Node g -> ReuniterM g SynVar
-addBaseTy gb = withEvent (\u -> let v = SynVarMeta (MetaVar u) in (v, EventAddNode gb v))
+addBaseTy :: Node g -> ReuniterM g UniqueId
+addBaseTy gb = withEvent (EventAddNode gb)
 
-addGenTy :: Traversable g => GenTy g -> ReuniterM g SynVar
+addGenTy :: Traversable g => GenTy g -> ReuniterM g UniqueId
 addGenTy (GenTy gt) = case gt of
   GenTyVarF tyv -> resolveTyVar tyv
   GenTyEmbedF gg -> traverse addGenTy gg >>= addBaseTy
 
-freshMetaVar :: ReuniterM g SynVar
-freshMetaVar = withEvent (\u -> let v = SynVarMeta (MetaVar u) in (v, EventFreshVar v))
+freshMetaVar :: ReuniterM g UniqueId
+freshMetaVar = withEvent EventNewMetaVar
 
-freshSkolemVar :: TyVar -> ReuniterM g SynVar
-freshSkolemVar tyv = withEvent  (\u -> let v = SynVarSkolem (SkolemVar u tyv) in (v, EventFreshVar v))
+freshSkolemVar :: TyVar -> ReuniterM g UniqueId
+freshSkolemVar = withEvent . EventNewSkolemVar
 
-bindVarFun :: Var -> SynVar -> ReuniterEnv g -> ReuniterEnv g
+bindVarFun :: Var -> UniqueId -> ReuniterEnv g -> ReuniterEnv g
 bindVarFun v b re = re { reBound = OM.snoc (reBound re) v b }
 
-bindVar :: Var -> SynVar -> ReuniterM g a -> ReuniterM g a
+bindVar :: Var -> UniqueId -> ReuniterM g a -> ReuniterM g a
 bindVar v = local . bindVarFun v
 
-bindTmVar :: TmVar -> SynVar -> ReuniterM g a -> ReuniterM g a
+bindTmVar :: TmVar -> UniqueId -> ReuniterM g a -> ReuniterM g a
 bindTmVar = bindVar . VarTm
 
-resolveBoundMaybe :: Var -> ReuniterM g (Maybe (Index, SynVar))
+resolveBoundMaybe :: Var -> ReuniterM g (Maybe (Index, UniqueId))
 resolveBoundMaybe v = asks (OM.lookup v . reBound)
 
-bindAllTyVarsFun :: Seq (Pair TyVar SynVar) -> ReuniterEnv u -> ReuniterEnv u
+bindAllTyVarsFun :: Seq (Pair TyVar UniqueId) -> ReuniterEnv u -> ReuniterEnv u
 bindAllTyVarsFun ps re = re { reBound = OM.snocAll (reBound re) (fmap (first VarTy) ps) }
 
-bindAllTyVars :: Seq (Pair TyVar SynVar) -> ReuniterM g a -> ReuniterM g a
+bindAllTyVars :: Seq (Pair TyVar UniqueId) -> ReuniterM g a -> ReuniterM g a
 bindAllTyVars ps = local (bindAllTyVarsFun ps)
 
-resolveTyVar :: TyVar -> ReuniterM g SynVar
+resolveTyVar :: TyVar -> ReuniterM g UniqueId
 resolveTyVar tyv = do
   let v = VarTy tyv
   mx <- resolveBoundMaybe v
@@ -128,8 +128,8 @@ resolveTyVar tyv = do
     Nothing -> throwError (ReuniterErrMissingVar v)
 
 resolveTmVarRaw :: (Traversable g)
-  => TmVar -> (Maybe Index -> SynVar -> ReuniterM g (SynVar, SpecTm h SynVar))
-  -> ReuniterM g (SynVar, SpecTm h SynVar)
+  => TmVar -> (Maybe Index -> UniqueId -> ReuniterM g (UniqueId, SpecTm h UniqueId))
+  -> ReuniterM g (UniqueId, SpecTm h UniqueId)
 resolveTmVarRaw tmv f = do
   -- First check if this term var has been bound
   mx <- resolveBoundMaybe (VarTm tmv)
@@ -159,8 +159,8 @@ resolveTmVarRaw tmv f = do
               pure (bodyId, spec)
 
 resolveTmVar :: (Traversable g)
-  => TmVar -> SpecTm h SynVar -> (Index -> SpecTm h SynVar)
-  -> ReuniterM g (SynVar, SpecTm h SynVar)
+  => TmVar -> SpecTm h UniqueId -> (Index -> SpecTm h UniqueId)
+  -> ReuniterM g (UniqueId, SpecTm h UniqueId)
 resolveTmVar tmv onFree onBound = resolveTmVarRaw tmv $ \mi b ->
   pure (b, maybe onFree onBound mi)
 
@@ -168,7 +168,8 @@ recordEvent :: Event g -> PreGraph g -> PreGraph g
 recordEvent = \case
   EventAddNode n k -> UP.insert k (PreElemNode n)
   EventConstrainEq i j k -> UP.insert k (PreElemEq i j)
-  EventFreshVar k -> UP.insert k PreElemFresh
+  EventNewMetaVar k -> UP.insert k PreElemMeta
+  EventNewSkolemVar tyv k -> UP.insert k (PreElemSkolem tyv)
 
 -- | Generate a 'PreGraph' (a 'Graph' with equality nodes) from the current set of events.
 preGraph :: ReuniterM g (PreGraph g)

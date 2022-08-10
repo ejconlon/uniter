@@ -5,6 +5,17 @@
 
 packages:
 - completed:
+    name: int-like
+    version: 0.1.0
+    git: git@github.com:ejconlon/int-like.git
+    pantry-tree:
+      size: 1134
+      sha256: eb8c6164e68d71ca83757cf63b79015847341c2165c34ba412eccffabd973d7f
+    commit: c277da03d6e0b61280f67169c4dc6219a2578faa
+  original:
+    git: git@github.com:ejconlon/int-like.git
+    commit: c277da03d6e0b61280f67169c4dc6219a2578faa
+- completed:
     name: prop-unit
     version: 0.1.0
     git: git@github.com:ejconlon/prop-unit.git

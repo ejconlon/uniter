@@ -8,31 +8,31 @@ import Data.Bitraversable (Bitraversable)
 import Data.Foldable (toList)
 import Data.Functor.Foldable (Base, Recursive (..))
 import Data.Kind (Type)
-import Uniter.Core (GenTy, Index, Node, SpecTm, SynVar, TmVar)
+import Uniter.Core (GenTy, Index, Node, SpecTm, TmVar, UniqueId)
 import Uniter.Reunitable.Monad (ReuniterM, addBaseTy, addGenTy, bindTmVar, constrainEq, freshMetaVar, resolveTmVar)
 
 -- | (There's really only one instance of this but we need to encapsulate the monad.)
 class (Traversable g, Monad m) => MonadReuniter (g :: Type -> Type) (m :: Type -> Type) | m -> g where
   -- | Allocate an ID for the given base type.
-  reuniterAddBaseTy :: Node g -> m SynVar
+  reuniterAddBaseTy :: Node g -> m UniqueId
 
   -- | Allocate an ID for the given generalized type (recursing bottom-up on individual nodes and resolving vars as needed)
-  reuniterAddGenTy :: GenTy g -> m SynVar
+  reuniterAddGenTy :: GenTy g -> m UniqueId
 
   -- | Allocate a fresh ID.
-  reuniterFreshVar :: m SynVar
+  reuniterFreshVar :: m UniqueId
 
   -- | Emit equality constraints on two IDs.
-  reuniterConstrainEq :: SynVar -> SynVar -> m SynVar
+  reuniterConstrainEq :: UniqueId -> UniqueId -> m UniqueId
 
   -- | Bind the type of the given term variable in the given scope.
-  reuniterBindTmVar :: TmVar -> SynVar -> m a -> m a
+  reuniterBindTmVar :: TmVar -> UniqueId -> m a -> m a
 
   -- | Lookup the type and conversion of the given term variable in the current scope.
-  reuniterResolveTmVar :: TmVar -> SpecTm h SynVar -> (Index -> SpecTm h SynVar) -> m (SynVar, SpecTm h SynVar)
+  reuniterResolveTmVar :: TmVar -> SpecTm h UniqueId -> (Index -> SpecTm h UniqueId) -> m (UniqueId, SpecTm h UniqueId)
 
   -- | Emit equality constraints on all IDs.
-  reuniterConstrainAllEq :: Foldable t => SynVar -> t SynVar -> m SynVar
+  reuniterConstrainAllEq :: Foldable t => UniqueId -> t UniqueId -> m UniqueId
   reuniterConstrainAllEq i0 js0 = go i0 (toList js0) where
     go !i = \case
       [] -> pure i
@@ -54,7 +54,7 @@ instance Traversable g => MonadReuniter g (ReuniterM g) where
 
 -- f, g, and h are base functors of some recursive structure
 class (Traversable f, Traversable g, Bitraversable h) => Reunitable f h g | f -> h g where
-  reunite :: MonadReuniter g m => f (m (SynVar, SpecTm h SynVar)) -> m (SynVar, SpecTm h SynVar)
+  reunite :: MonadReuniter g m => f (m (UniqueId, SpecTm h UniqueId)) -> m (UniqueId, SpecTm h UniqueId)
 
-reuniteTerm :: (Base t ~ f, Recursive t, Reunitable f h g, MonadReuniter g m) => t -> m (SynVar, SpecTm h SynVar)
+reuniteTerm :: (Base t ~ f, Recursive t, Reunitable f h g, MonadReuniter g m) => t -> m (UniqueId, SpecTm h UniqueId)
 reuniteTerm = cata reunite
