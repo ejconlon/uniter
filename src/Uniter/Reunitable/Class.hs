@@ -1,12 +1,13 @@
 module Uniter.Reunitable.Class
   ( MonadReuniter (..)
   , Reunitable (..)
+  , reuniteTerm
   ) where
 
 import Data.Bitraversable (Bitraversable)
 import Data.Foldable (toList)
+import Data.Functor.Foldable (Base, Recursive (..))
 import Data.Kind (Type)
-import Data.Void (Void)
 import Uniter.Core (BoundId)
 import Uniter.Reunitable.Core (GenTy, Index, SpecTm, TmVar)
 import Uniter.Reunitable.Monad (ReuniterM, addBaseTy, addGenTy, bindTmVar, constrainEq, freshVar, resolveTmVar)
@@ -44,7 +45,7 @@ class (Traversable g, Monad m) => MonadReuniter (g :: Type -> Type) (m :: Type -
   reuniterBindFreshTmVar :: TmVar -> m a -> m a
   reuniterBindFreshTmVar tmv m = reuniterFreshVar >>= \b -> reuniterBindTmVar tmv b m
 
-instance (Traversable g) => MonadReuniter g (ReuniterM Void g) where
+instance Traversable g => MonadReuniter g (ReuniterM g) where
   reuniterAddBaseTy = addBaseTy
   reuniterAddGenTy = addGenTy
   reuniterFreshVar = freshVar
@@ -55,3 +56,6 @@ instance (Traversable g) => MonadReuniter g (ReuniterM Void g) where
 -- f, g, and h are base functors of some recursive structure
 class (Traversable f, Traversable g, Bitraversable h) => Reunitable f h g | f -> h g where
   reunite :: MonadReuniter g m => f (m (BoundId, SpecTm h BoundId)) -> m (BoundId, SpecTm h BoundId)
+
+reuniteTerm :: (Base t ~ f, Recursive t, Reunitable f h g, MonadReuniter g m) => t -> m (BoundId, SpecTm h BoundId)
+reuniteTerm = cata reunite

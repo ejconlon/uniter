@@ -7,22 +7,21 @@ module Uniter.Process
   , ProcessState (..)
   , psUnionMapL
   , newProcessState
-  , ProcessT
-  , runProcessT
+  , ProcessM
+  , runProcessM
   , compact
   , canonicalize
   , extract
-  , embedUniterT
+  , embedReuniterM
   ) where
 
 import Control.Exception (Exception)
 import Control.Monad.Except (Except, ExceptT, MonadError (..), runExcept, runExceptT)
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.State.Strict (MonadState (..), StateT, gets, modify', runState, runStateT, state)
-import Control.Monad.Trans (MonadTrans (..))
+import Control.Monad.State.Strict (MonadState (..), State, StateT, gets, modify', runState, runStateT, state)
 import Control.Monad.Writer.Strict (MonadWriter, WriterT, runWriterT, tell)
 import Data.Foldable (for_)
 import Data.Functor (($>))
+import Data.Map.Strict (Map)
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
 import Data.These (These (..))
@@ -33,7 +32,9 @@ import Lens.Micro (lens)
 import Uniter.Align (Alignable (..))
 import Uniter.Core (BoundId (..), Event (..))
 import Uniter.Graph (Elem (..), Graph (..), elemTraversal)
-import Uniter.Monad (UniterState (..), UniterT, runUniterT)
+import Uniter.Reunitable.Core (Quant, TmVar)
+import Uniter.Reunitable.Monad (ReuniterErr, ReuniterM, ReuniterState (..), newReuniterEnv, newReuniterState,
+                                runReuniterM)
 import Uniter.UnionMap (UnionEntry (..), UnionMap (..), UnionMapAddVal (..), UnionMapLens, UnionMapLookupVal (..),
                         UnionMapMergeVal (..), UnionMergeMany, addUnionMapLM, canonicalizeUnionMapLM, compactUnionMapLM,
                         emptyUnionMap, lookupUnionMapLM, mergeManyUnionMapLM)
@@ -43,6 +44,7 @@ type RebindMap = IntLikeMap BoundId BoundId
 data ProcessErr e =
     ProcessErrDuplicate !BoundId
   | ProcessErrMissing !BoundId
+  | ProcessErrReuniter !ReuniterErr
   | ProcessErrEmbed !e
   deriving stock (Eq, Ord, Show, Typeable)
 
@@ -62,14 +64,11 @@ psUnionMapL = lens psUnionMap (\ps um -> ps { psUnionMap = um })
 newProcessState :: BoundId -> ProcessState g
 newProcessState uniq = ProcessState uniq emptyUnionMap
 
-newtype ProcessT e g m a = ProcessT { unProcessT :: ExceptT (ProcessErr e) (StateT (ProcessState g) m) a }
-  deriving newtype (Functor, Applicative, Monad, MonadIO, MonadState (ProcessState g), MonadError (ProcessErr e))
+newtype ProcessM e g a = ProcessM { unProcessM :: ExceptT (ProcessErr e) (State (ProcessState g)) a }
+  deriving newtype (Functor, Applicative, Monad, MonadState (ProcessState g), MonadError (ProcessErr e))
 
-instance MonadTrans (ProcessT e g) where
-  lift = ProcessT . lift . lift
-
-runProcessT :: ProcessT e g m a -> ProcessState g -> m (Either (ProcessErr e) a, ProcessState g)
-runProcessT = runStateT . runExceptT . unProcessT
+runProcessM :: ProcessM e g a -> ProcessState g -> (Either (ProcessErr e) a, ProcessState g)
+runProcessM = runState . runExceptT . unProcessM
 
 compactOnState :: ProcessState g -> (RebindMap, ProcessState g)
 compactOnState = runState (compactUnionMapLM psUnionMapL)
@@ -91,19 +90,19 @@ extractOnState ps = res where
 
 -- | Compact the union map - compresses all chains to directly reference roots for faster lookup
 -- Returns a map of all rebound (non-root) ids to roots.
-compact :: Monad m => ProcessT e g m RebindMap
+compact :: ProcessM e g RebindMap
 compact = state compactOnState
 
 -- | Canonicalize the union map - compacts and eliminates nodes identical in structure.
 -- Returns a map of all rebound (non-root) ids to roots (include those removed during canonicalization).
-canonicalize :: (Monad m, Traversable g) => ProcessT e g m RebindMap
+canonicalize :: Traversable g => ProcessM e g RebindMap
 canonicalize = state canonicalizeOnState
 
 -- | Extracts a final graph from the union map, canonicalizing in the process.
-extract :: (Monad m, Traversable g) => ProcessT e g m (RebindMap, Graph g)
+extract :: Traversable g => ProcessM e g (RebindMap, Graph g)
 extract = state extractOnState
 
-lookupP :: Monad m => BoundId -> ProcessT e g m (BoundId, Elem g)
+lookupP :: BoundId -> ProcessM e g (BoundId, Elem g)
 lookupP i = do
   val <- lookupUnionMapLM psUnionMapL i
   case val of
@@ -157,7 +156,7 @@ alignMerge b mdx (Duo di dj) = res where
         alignElems dy dj
       Nothing -> error "impossible"
 
-mergeP :: (Monad m, Alignable e g) => Item -> ProcessT e g m (Seq Item)
+mergeP :: Alignable e g => Item -> ProcessM e g (Seq Item)
 mergeP (Item children root) = do
   b <- gets psUnique
   erb <- mergeManyUnionMapLM psUnionMapL (alignMerge b) root children
@@ -166,17 +165,17 @@ mergeP (Item children root) = do
     UnionMapMergeValEmbed e -> throwError (ProcessErrEmbed e)
     UnionMapMergeValMerged _ _ (r, i) -> modify' (\st -> st { psUnique = i }) $> r
 
-freshP :: Monad m => ProcessT e g m BoundId
+freshP :: ProcessM e g BoundId
 freshP = state (\st -> let uniq = psUnique st in (uniq, st { psUnique = succ uniq }))
 
-constrainP :: (Monad m, Alignable e g) => Item -> ProcessT e g m ()
+constrainP :: Alignable e g => Item -> ProcessM e g ()
 constrainP it = do
   -- NOTE contract is that the root will not have been referenced before,
   -- so we have to add it to the graph when we see it
   defineP ElemFresh (itemRoot it)
   constrainRecP (Seq.singleton it)
 
-constrainRecP :: (Monad m, Alignable e g) => Seq Item -> ProcessT e g m ()
+constrainRecP :: Alignable e g => Seq Item -> ProcessM e g ()
 constrainRecP = \case
     Empty -> pure ()
     it :<| rest -> do
@@ -185,24 +184,28 @@ constrainRecP = \case
       for_ newIts $ \newIt -> defineP ElemFresh (itemRoot newIt)
       constrainRecP (newIts <> rest)
 
-defineP :: Monad m => Elem g -> BoundId -> ProcessT e g m ()
+defineP :: Elem g -> BoundId -> ProcessM e g ()
 defineP d i = do
   val <- addUnionMapLM psUnionMapL i d
   case val of
     UnionMapAddValAdded -> pure ()
     UnionMapAddValDuplicate -> throwError (ProcessErrDuplicate i)
 
-handleEvent :: (Monad m, Alignable e g) => Event g -> ProcessT e g m ()
+handleEvent :: Alignable e g => Event g -> ProcessM e g ()
 handleEvent = \case
   EventAddNode n k -> defineP (ElemNode n) k
   EventConstrainEq i j k -> constrainP (Item (Duo i j) k)
   EventFreshVar k -> defineP ElemFresh k
 
-embedUniterT :: (Monad m, Alignable e g) => UniterT g m a -> ProcessT e g m a
-embedUniterT u = do
+embedReuniterM :: Alignable e g => Map TmVar (Quant g) -> ReuniterM g a -> ProcessM e g a
+embedReuniterM fm m = do
   q <- gets psUnique
-  let us = UniterState q Empty
-  (a, UniterState q' evs) <- lift (runUniterT u us)
-  modify' (\ps -> ps { psUnique = q' })
-  for_ evs handleEvent
-  pure a
+  let re = newReuniterEnv fm
+      rs = newReuniterState q
+  let (ea, ReuniterState q' evs) = runReuniterM m re rs
+  case ea of
+    Left e -> throwError (ProcessErrReuniter e)
+    Right a -> do
+      modify' (\ps -> ps { psUnique = q' })
+      for_ evs handleEvent
+      pure a

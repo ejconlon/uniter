@@ -8,35 +8,26 @@ module Uniter.Example.Simple
   , ExpF (..)
   , Ty (..)
   , TyF (..)
-  , M
-  , runM
   , exampleLinear
   , exampleExponential
   , processVerbose
   , main
   ) where
 
-import Control.Exception (throwIO)
 import Control.Monad (void)
 import Control.Monad.Catch (MonadThrow (..))
-import Control.Monad.Except (ExceptT, MonadError (..), runExceptT)
-import Control.Monad.IO.Class (MonadIO (..))
-import Control.Monad.Reader (MonadReader, ReaderT (..))
 import Data.Functor.Foldable.TH (makeBaseFunctor)
-import Data.Text (Text)
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
-import Uniter (Alignable (..), UnalignableErr (..), Unitable (..), UniteSuccess (..), addNode, constrainEq, freshVar,
-               uniteResult)
-import Uniter.FreeEnv (FreeEnv, FreeEnvMissingErr (..))
-import qualified Uniter.FreeEnv as UF
+import Uniter (Alignable (..), MonadUniter (..), UnalignableErr (..), Unitable (..), UniteSuccess (..), uniteResult)
 import Uniter.Render (writeGraphDot, writePreGraphDot)
+import Uniter.Reunitable.Core (TmVar)
 
 -- | A simple expression language with constants, vars, lets, tuples, and projections.
 data Exp =
     ExpConst
-  | ExpUseBind !Text
-  | ExpDefBind !Text Exp Exp
+  | ExpUseBind !TmVar
+  | ExpDefBind !TmVar Exp Exp
   | ExpTuple Exp Exp
   | ExpFirst Exp
   | ExpSecond Exp
@@ -50,8 +41,8 @@ deriving stock instance Show a => Show (ExpF a)
 
 -- | Our expressions are either constant type or pairs of types.
 data Ty =
-    TyPair Ty Ty
-  | TyConst
+    TyConst
+  | TyPair Ty Ty
   deriving stock (Eq, Show)
 
 -- Builds a type functor TyF
@@ -66,52 +57,44 @@ instance Alignable UnalignableErr TyF where
   align (TyPairF a b) (TyPairF c d) = Right (TyPairF (These a c) (These b d))
   align _ _ = Left UnalignableErr
 
--- | The effects we'll use for unification - reader for maintaining a var env, IO for debug output
-newtype M a = M { unM :: ReaderT (FreeEnv Text) (ExceptT (FreeEnvMissingErr Text) IO) a }
-  deriving newtype (Functor, Applicative, Monad, MonadReader (FreeEnv Text), MonadError (FreeEnvMissingErr Text), MonadIO, MonadThrow)
-
-runM :: M a -> IO a
-runM m = runExceptT (runReaderT (unM m) UF.empty) >>= either throwIO pure
-
-instance Unitable ExpF TyF M where
+instance Unitable ExpF TyF where
   -- Inspect our expression functor and perform unification
   unite = \case
     ExpConstF ->
       -- constants have constant type
-      addNode TyConstF
+      uniterAddBaseTy TyConstF
     ExpUseBindF n -> do
       -- vars require we lookup the binding, throwing if it's not there
-      b <- UF.lookupM n
-      maybe (throwError (FreeEnvMissingErr n)) pure b
+      uniterResolveTmVar n
     ExpDefBindF n mx my -> do
       -- first get the type of the argument of the let
       x <- mx
       -- then bind the var, and return the type of the body with it bound
-      UF.insertM n x my
+      uniterBindTmVar n x my
     ExpTupleF mx my -> do
       -- find the type of both arguments
       x <- mx
       y <- my
       -- and tuple them together!
-      addNode (TyPairF x y)
+      uniterAddBaseTy (TyPairF x y)
     ExpFirstF mx -> do
       -- find the type of the argument
       x <- mx
       -- and ensure it unifies with a tuple type
-      v <- freshVar
-      w <- freshVar
-      y <- addNode (TyPairF v w)
-      _ <- constrainEq x y
+      v <- uniterFreshVar
+      w <- uniterFreshVar
+      y <- uniterAddBaseTy (TyPairF v w)
+      _ <- uniterConstrainEq x y
       -- fst returns the type of the first element of the pair
       pure v
     ExpSecondF mx -> do
       -- just like first, find the type of the argument
       x <- mx
       -- and again ensure it unifies with a tuple type
-      v <- freshVar
-      w <- freshVar
-      y <- addNode (TyPairF v w)
-      _ <- constrainEq x y
+      v <- uniterFreshVar
+      w <- uniterFreshVar
+      y <- uniterAddBaseTy (TyPairF v w)
+      _ <- uniterConstrainEq x y
       -- BUT return something different here:
       -- snd returns the type of the second element of the pair
       pure w
@@ -138,24 +121,24 @@ exampleExponential =
 -- | A complete example of how to infer the type of an expression
 -- with unification through 'Unitable' and 'Alignable'.
 processVerbose :: String -> Exp -> IO Ty
-processVerbose name expr = runM go where
+processVerbose name expr = go where
   go = do
-    liftIO $ putStrLn ("*** Processing example: " ++ show name)
-    liftIO $ putStrLn "--- Expression:"
+    putStrLn ("*** Processing example: " ++ show name)
+    putStrLn "--- Expression:"
     pPrint expr
-    (pg, res) <- uniteResult expr
-    liftIO $ writePreGraphDot ("dot/" ++ name ++ "-initial.dot") pg
+    let (pg, res) = uniteResult expr
+    writePreGraphDot ("dot/" ++ name ++ "-initial.dot") pg
     case res of
       Left e -> do
-        liftIO $ putStrLn "--- Failure"
+        putStrLn "--- Failure"
         throwM e
       Right (UniteSuccess bid ty rs g) -> do
-        liftIO $ putStrLn "--- Success"
+        putStrLn "--- Success"
         goVerbose bid rs g
-        liftIO $ putStrLn "--- Final type: "
+        putStrLn "--- Final type: "
         pPrint ty
         pure ty
-  goVerbose bid rs g = liftIO $ do
+  goVerbose bid rs g = do
     writeGraphDot ("dot/" ++ name ++ "-processed.dot") g
     putStrLn ("--- Expr id: " ++ show bid)
     putStrLn "--- Rebind map:"

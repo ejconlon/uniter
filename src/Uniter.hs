@@ -3,20 +3,19 @@ module Uniter
   ( Alignable (..)
   , UnalignableErr (..)
   , BoundId (..)
-  , UniterT
-  , Unitable (..)
-  , constrainEq
-  , constrainAllEq
-  , addNode
-  , freshVar
-  , uniteTerm
   , ProcessErr (..)
+  , MonadUniter (..)
+  , Unitable (..)
+  , uniteTerm
+  , MonadReuniter (..)
+  , Reunitable (..)
+  , reuniteTerm
   , module Uniter.Unitable.Driver
   ) where
 
 import Uniter.Align (Alignable (..), UnalignableErr (..))
 import Uniter.Core (BoundId (..))
-import Uniter.Monad (UniterT, addNode, constrainAllEq, constrainEq, freshVar)
 import Uniter.Process (ProcessErr (..))
-import Uniter.Unitable.Class (Unitable (..), uniteTerm)
+import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..), reuniteTerm)
+import Uniter.Unitable.Class (MonadUniter (..), Unitable (..), uniteTerm)
 import Uniter.Unitable.Driver

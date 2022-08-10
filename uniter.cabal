@@ -30,9 +30,7 @@ library
       Uniter.Example
       Uniter.Example.Complex
       Uniter.Example.Simple
-      Uniter.FreeEnv
       Uniter.Graph
-      Uniter.Monad
       Uniter.PreGraph
       Uniter.Process
       Uniter.Render

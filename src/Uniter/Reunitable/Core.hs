@@ -21,6 +21,8 @@ module Uniter.Reunitable.Core
   , closedGenTy
   , Quant (..)
   , forAllQuant
+  , DummyAnnTm (..)
+  , dummySpecTm
   ) where
 
 import Data.Bifoldable (Bifoldable (..))
@@ -192,3 +194,18 @@ deriving stock instance Show (g (GenTy g)) => (Show (Quant g))
 
 forAllQuant :: Seq TyVar -> GenTy g -> Quant g
 forAllQuant tyvs gt = if Seq.null tyvs then QuantBare gt else QuantForAll (ForAll tyvs gt)
+
+data DummyAnnTm a r = DummyAnnTm
+  deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
+
+instance Bifunctor DummyAnnTm where
+  bimap _ _ _ = DummyAnnTm
+
+instance Bifoldable DummyAnnTm where
+  bifoldr _ _ z _ = z
+
+instance Bitraversable DummyAnnTm where
+  bitraverse _ _ _ = pure DummyAnnTm
+
+dummySpecTm :: SpecTm DummyAnnTm a
+dummySpecTm = embedSpecTm DummyAnnTm

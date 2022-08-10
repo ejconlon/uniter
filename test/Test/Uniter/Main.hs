@@ -1,6 +1,5 @@
 module Test.Uniter.Main (main) where
 
-import Control.Monad.IO.Class (liftIO)
 import Data.Bifunctor (bimap, first)
 import Data.Char (chr, ord)
 import Data.Semigroup (Max)
@@ -13,7 +12,7 @@ import IntLike.Set (IntLikeSet)
 import qualified IntLike.Set as ILS
 import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
-import Uniter.Example.Simple (Ty (..), exampleExponential, exampleLinear, runM)
+import Uniter.Example.Simple (Ty (..), exampleExponential, exampleLinear)
 import Uniter.Reunitable.Core (Index (..), Level (..), tupleToPair)
 import Uniter.Reunitable.OrderedMap (OrderedMap)
 import qualified Uniter.Reunitable.OrderedMap as OM
@@ -215,10 +214,10 @@ testOmUnit = testUnit "OM unit" $ do
 testExample :: TestTree
 testExample = testUnit "example" $ do
   let expLinTy = TyPair TyConst TyConst
-  actualLinTy <- liftIO $ runM $ quickUniteResult exampleLinear
+  actualLinTy <- quickUniteResult exampleLinear
   actualLinTy === expLinTy
   let expExpTy = TyPair expLinTy (TyPair expLinTy expLinTy)
-  actualExpTy <- liftIO $ runM $ quickUniteResult exampleExponential
+  actualExpTy <- quickUniteResult exampleExponential
   actualExpTy === expExpTy
 
 main :: IO ()
