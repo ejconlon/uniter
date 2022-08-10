@@ -30,9 +30,8 @@ import Data.Typeable (Typeable)
 import IntLike.Map (IntLikeMap)
 import Lens.Micro (lens)
 import Uniter.Align (Alignable (..))
-import Uniter.Core (BoundId (..), Event (..))
+import Uniter.Core (BoundId (..), Event (..), Quant, TmVar)
 import Uniter.Graph (Elem (..), Graph (..), elemTraversal)
-import Uniter.Reunitable.Core (Quant, TmVar)
 import Uniter.Reunitable.Monad (ReuniterErr, ReuniterM, ReuniterState (..), newReuniterEnv, newReuniterState,
                                 runReuniterM)
 import Uniter.UnionMap (UnionEntry (..), UnionMap (..), UnionMapAddVal (..), UnionMapLens, UnionMapLookupVal (..),

@@ -1,4 +1,4 @@
-module Uniter.Reunitable.OrderedMap
+module Uniter.OrderedMap
   ( OrderedMap
   , empty
   , level
@@ -19,7 +19,7 @@ import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
 import qualified Data.Set as Set
 import Prelude hiding (lookup)
-import Uniter.Reunitable.Core (Index (..), Level (..), Pair (..), pairToTuple)
+import Uniter.Core (Index (..), Level (..), Pair (..), pairToTuple)
 
 -- | A map where mutation is done through snocing and unsnocing
 data OrderedMap k v = OrderedMap

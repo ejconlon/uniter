@@ -5,8 +5,7 @@ module Uniter.Unitable.Class
   ) where
 
 import Data.Functor.Foldable (Base, Recursive (..))
-import Uniter.Core (BoundId)
-import Uniter.Reunitable.Core (TmVar, dummySpecTm)
+import Uniter.Core (BoundId, TmVar, dummySpecTm)
 import Uniter.Reunitable.Monad (ReuniterM, addBaseTy, bindTmVar, constrainEq, freshVar, resolveTmVar)
 
 class (Traversable g, Monad m) => MonadUniter g m | m -> g where

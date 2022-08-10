@@ -2,7 +2,6 @@
 module Uniter
   ( Alignable (..)
   , UnalignableErr (..)
-  , BoundId (..)
   , ProcessErr (..)
   , MonadUniter (..)
   , Unitable (..)
@@ -10,11 +9,12 @@ module Uniter
   , MonadReuniter (..)
   , Reunitable (..)
   , reuniteTerm
+  , module Uniter.Core
   , module Uniter.Unitable.Driver
   ) where
 
 import Uniter.Align (Alignable (..), UnalignableErr (..))
-import Uniter.Core (BoundId (..))
+import Uniter.Core
 import Uniter.Process (ProcessErr (..))
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..), reuniteTerm)
 import Uniter.Unitable.Class (MonadUniter (..), Unitable (..), uniteTerm)

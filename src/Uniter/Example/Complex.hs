@@ -9,8 +9,8 @@ import Data.Bifunctor.TH (deriveBifoldable, deriveBifunctor, deriveBitraversable
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.These (These (..))
 import Uniter (Alignable (..), UnalignableErr (..))
+import Uniter.Core (GenTy, Index, TmVar, embedSpecTm)
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
-import Uniter.Reunitable.Core (GenTy, Index, TmVar, embedSpecTm)
 
 data Ty =
     TyInt

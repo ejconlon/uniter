@@ -25,13 +25,12 @@ import Data.Bifunctor (first)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Sequence (Seq (..))
-import Uniter.Core (BoundId, Event (..))
+import Uniter.Core (BoundId, Event (..), ForAll (..), GenTy (..), GenTyF (..), Index, Pair (..), Quant (..), SpecTm,
+                    TmVar, TyVar, Var (..), bindSpecTm)
+import Uniter.OrderedMap (OrderedMap)
+import qualified Uniter.OrderedMap as OM
 import Uniter.PreGraph (PreElem (..), PreGraph (..))
 import qualified Uniter.PreGraph as UP
-import Uniter.Reunitable.Core (ForAll (..), GenTy (..), GenTyF (..), Index, Pair (..), Quant (..), SpecTm, TmVar, TyVar,
-                               Var (..), bindSpecTm)
-import Uniter.Reunitable.OrderedMap (OrderedMap)
-import qualified Uniter.Reunitable.OrderedMap as OM
 
 data ReuniterEnv g = ReuniterEnv
   { reTmFree :: Map TmVar (Quant g)

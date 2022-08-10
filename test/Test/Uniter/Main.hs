@@ -12,10 +12,10 @@ import IntLike.Set (IntLikeSet)
 import qualified IntLike.Set as ILS
 import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
+import Uniter.Core (Index (..), Level (..), tupleToPair)
 import Uniter.Example.Simple (Ty (..), exampleExponential, exampleLinear)
-import Uniter.Reunitable.Core (Index (..), Level (..), tupleToPair)
-import Uniter.Reunitable.OrderedMap (OrderedMap)
-import qualified Uniter.Reunitable.OrderedMap as OM
+import Uniter.OrderedMap (OrderedMap)
+import qualified Uniter.OrderedMap as OM
 import Uniter.UnionMap (Changed (..), UnionEquiv (..), UnionMap, UnionMapAddVal (..), UnionMapLookupVal (..),
                         UnionMapMergeVal (..), UnionMapTraceRes (..), UnionMergeOne, addUnionMapM, concatUnionMergeOne,
                         emptyUnionMap, equivUnionMapM, lookupUnionMapM, mergeOneUnionMapM, sizeUnionMap, traceUnionMap,

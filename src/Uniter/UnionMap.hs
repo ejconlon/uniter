@@ -54,13 +54,11 @@ module Uniter.UnionMap
   , mergeManyUnionMapM
   ) where
 
-import Control.DeepSeq (NFData)
 import Control.Monad.Except (MonadError (..))
 import Control.Monad.State.Strict (MonadState, get, put)
 import Data.Coerce (Coercible)
 import Data.Foldable (fold, foldl', toList)
 import Data.Maybe (fromMaybe)
-import GHC.Generics (Generic)
 import IntLike.Map (IntLikeMap)
 import qualified IntLike.Map as ILM
 import IntLike.Set (IntLikeSet)
@@ -95,8 +93,7 @@ emptyUnionEquiv = UnionEquiv ILM.empty ILM.empty
 data UnionEntry k v =
     UnionEntryLink !k
   | UnionEntryValue !v
-  deriving stock (Eq, Show, Ord, Generic, Functor, Foldable, Traversable)
-  deriving anyclass (NFData)
+  deriving stock (Eq, Show, Ord, Functor, Foldable, Traversable)
 
 type UnionMergeOne e v r = Maybe v -> v -> Either e (r, v)
 type UnionMergeMany f e v r = Maybe v -> f v -> Either e (r, v)
@@ -131,8 +128,7 @@ concatUnionMergeMany :: (Foldable f, Monoid v) => UnionMergeMany f e v ()
 concatUnionMergeMany mv vs = concatUnionMergeOne mv (fold vs)
 
 newtype UnionMap k v = UnionMap { unUnionMap :: IntLikeMap k (UnionEntry k v) }
-  deriving stock (Eq, Show, Generic, Functor, Foldable, Traversable)
-  deriving anyclass (NFData)
+  deriving stock (Eq, Show, Functor, Foldable, Traversable)
 
 type UnionMapLens s k v = Lens' s (UnionMap k v)
 

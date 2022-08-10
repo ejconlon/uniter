@@ -19,9 +19,9 @@ import Control.Monad.Catch (MonadThrow (..))
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
-import Uniter (Alignable (..), MonadUniter (..), UnalignableErr (..), Unitable (..), UniteSuccess (..), uniteResult)
+import Uniter (Alignable (..), MonadUniter (..), TmVar, UnalignableErr (..), Unitable (..), UniteSuccess (..),
+               uniteResult)
 import Uniter.Render (writeGraphDot, writePreGraphDot)
-import Uniter.Reunitable.Core (TmVar)
 
 -- | A simple expression language with constants, vars, lets, tuples, and projections.
 data Exp =
