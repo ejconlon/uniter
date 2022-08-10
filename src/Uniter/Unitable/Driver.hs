@@ -22,7 +22,7 @@ import Uniter.Reunitable.Monad (ReuniterM, newReuniterEnv, newReuniterState, pre
 import Uniter.Unitable.Class (Unitable, uniteTerm)
 
 data UniteErr e g =
-    UniteErrProcess !(ProcessErr e)
+    UniteErrProcess !(ProcessErr e g)
   | UniteErrExtract !UniqueId !UniqueId !RebindMap !(Graph g)
 
 deriving instance (Eq e, Eq (Node g)) => Eq (UniteErr e g)

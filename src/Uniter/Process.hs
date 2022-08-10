@@ -30,7 +30,7 @@ import Data.Typeable (Typeable)
 import IntLike.Map (IntLikeMap)
 import Lens.Micro (lens)
 import Uniter.Align (Alignable (..))
-import Uniter.Core (Event (..), Quant, TmVar, UniqueId (..))
+import Uniter.Core (Event (..), Node, Quant, TmVar, TyVar, UniqueId (..))
 import Uniter.Graph (Elem (..), Graph (..), elemTraversal)
 import Uniter.Reunitable.Monad (ReuniterErr, ReuniterM, ReuniterState (..), newReuniterEnv, newReuniterState,
                                 runReuniterM)
@@ -40,14 +40,19 @@ import Uniter.UnionMap (UnionEntry (..), UnionMap (..), UnionMapAddVal (..), Uni
 
 type RebindMap = IntLikeMap UniqueId UniqueId
 
-data ProcessErr e =
+data ProcessErr e g =
     ProcessErrDuplicate !UniqueId
   | ProcessErrMissing !UniqueId
   | ProcessErrReuniter !ReuniterErr
+  | ProcessErrSkolemAlign !TyVar !(Elem g)
   | ProcessErrEmbed !e
-  deriving stock (Eq, Ord, Show, Typeable)
+  deriving stock (Typeable)
 
-instance (Show e, Typeable e) => Exception (ProcessErr e)
+deriving stock instance (Eq e, Eq (Node g)) => Eq (ProcessErr e g)
+deriving stock instance (Ord e, Ord (Node g)) => Ord (ProcessErr e g)
+deriving stock instance (Show e, Show (Node g)) => Show (ProcessErr e g)
+
+instance (Show e, Typeable e, Show (Node g), Typeable g) => Exception (ProcessErr e g)
 
 data ProcessState g = ProcessState
   { psUnique :: !UniqueId
@@ -63,10 +68,10 @@ psUnionMapL = lens psUnionMap (\ps um -> ps { psUnionMap = um })
 newProcessState :: UniqueId -> ProcessState g
 newProcessState uniq = ProcessState uniq emptyUnionMap
 
-newtype ProcessM e g a = ProcessM { unProcessM :: ExceptT (ProcessErr e) (State (ProcessState g)) a }
-  deriving newtype (Functor, Applicative, Monad, MonadState (ProcessState g), MonadError (ProcessErr e))
+newtype ProcessM e g a = ProcessM { unProcessM :: ExceptT (ProcessErr e g) (State (ProcessState g)) a }
+  deriving newtype (Functor, Applicative, Monad, MonadState (ProcessState g), MonadError (ProcessErr e g))
 
-runProcessM :: ProcessM e g a -> ProcessState g -> (Either (ProcessErr e) a, ProcessState g)
+runProcessM :: ProcessM e g a -> ProcessState g -> (Either (ProcessErr e g) a, ProcessState g)
 runProcessM = runState . runExceptT . unProcessM
 
 compactOnState :: ProcessState g -> (RebindMap, ProcessState g)
@@ -117,22 +122,22 @@ data Item = Item
   } deriving stock (Eq, Show)
 
 -- Effect used entirely within 'alignMerge'
-newtype AlignM e a = AlignM { unAlignM :: WriterT (Seq Item) (StateT UniqueId (Except e)) a }
-  deriving newtype (Functor, Applicative, Monad, MonadWriter (Seq Item), MonadState UniqueId, MonadError e)
+newtype AlignM e g a = AlignM { unAlignM :: WriterT (Seq Item) (StateT UniqueId (Except (ProcessErr e g))) a }
+  deriving newtype (Functor, Applicative, Monad, MonadWriter (Seq Item), MonadState UniqueId, MonadError (ProcessErr e g))
 
-runAlignM :: AlignM e a -> UniqueId -> Either e (a, UniqueId, Seq Item)
+runAlignM :: AlignM e g a -> UniqueId -> Either (ProcessErr e g) (a, UniqueId, Seq Item)
 runAlignM al b = fmap (\((a, w), s) -> (a, s, w)) (runExcept (runStateT (runWriterT (unAlignM al)) b))
 
-alignElems :: Alignable e g => Elem g -> Elem g -> AlignM e (Elem g)
+alignElems :: Alignable e g => Elem g -> Elem g -> AlignM e g (Elem g)
 alignElems da db =
   case (da, db) of
-    (ElemSkolem _, _) -> error "TODO"
-    (_, ElemSkolem _) -> error "TODO"
     (ElemMeta, _) -> pure db
     (_, ElemMeta) -> pure da
+    (ElemSkolem tyv, _) -> throwError (ProcessErrSkolemAlign tyv db)
+    (_, ElemSkolem tyv) -> throwError (ProcessErrSkolemAlign tyv da)
     (ElemNode na, ElemNode nb) -> do
       case align na nb of
-        Left e -> throwError e
+        Left e -> throwError (ProcessErrEmbed e)
         Right g -> do
           h <- for g $ \these -> do
             case these of
@@ -147,7 +152,7 @@ alignElems da db =
           pure (ElemNode h)
 
 -- | Callback to be provided to a union map to merge values of the same key by aligning their structures.
-alignMerge :: Alignable e g => UniqueId -> UnionMergeMany Duo e (Elem g) (Seq Item, UniqueId)
+alignMerge :: Alignable e g => UniqueId -> UnionMergeMany Duo (ProcessErr e g) (Elem g) (Seq Item, UniqueId)
 alignMerge b mdx (Duo di dj) = res where
   res = fmap (\(v, s, w) -> ((w, s), v)) (runAlignM body b)
   body = do
@@ -163,7 +168,7 @@ mergeP (Item children root) = do
   erb <- mergeManyUnionMapLM psUnionMapL (alignMerge b) root children
   case erb of
     UnionMapMergeValMissing i -> throwError (ProcessErrMissing i)
-    UnionMapMergeValEmbed e -> throwError (ProcessErrEmbed e)
+    UnionMapMergeValEmbed e -> throwError e
     UnionMapMergeValMerged _ _ (r, i) -> modify' (\st -> st { psUnique = i }) $> r
 
 freshP :: ProcessM e g UniqueId
