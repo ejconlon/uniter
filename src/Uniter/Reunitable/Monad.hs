@@ -94,8 +94,14 @@ addGenTy (GenTy gt) = case gt of
 freshVar :: ReuniterM e g BoundId
 freshVar = withEvent EventFreshVar
 
+bindVarFun :: Var -> BoundId -> ReuniterEnv g -> ReuniterEnv g
+bindVarFun v b re = re { reBound = OM.snoc (reBound re) v b }
+
+bindVar :: Var -> BoundId -> ReuniterM e g a -> ReuniterM e g a
+bindVar v = local . bindVarFun v
+
 bindTmVar :: TmVar -> BoundId -> ReuniterM e g a -> ReuniterM e g a
-bindTmVar = undefined
+bindTmVar = bindVar . VarTm
 
 resolveBoundMaybe :: Var -> ReuniterM e g (Maybe (Index, BoundId))
 resolveBoundMaybe v = asks (OM.lookup v . reBound)

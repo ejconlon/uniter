@@ -10,7 +10,7 @@ import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.These (These (..))
 import Uniter (Alignable (..), UnalignableErr (..))
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
-import Uniter.Reunitable.Core (Index, Quant, TmVar, embedSpecTm)
+import Uniter.Reunitable.Core (GenTy, Index, TmVar, embedSpecTm)
 
 data Ty =
     TyInt
@@ -29,8 +29,8 @@ data Exp =
   | ExpAdd Exp Exp
   | ExpIfZero Exp Exp Exp
   | ExpApp Exp Exp
-  | ExpAbs !TmVar !(Maybe (Quant TyF)) !Exp
-  | ExpLet !TmVar !(Maybe (Quant TyF)) !Exp !Exp
+  | ExpAbs !TmVar !(Maybe (GenTy TyF)) !Exp
+  | ExpLet !TmVar !(Maybe (GenTy TyF)) !Exp !Exp
   deriving stock (Eq, Ord, Show)
 
 makeBaseFunctor ''Exp
@@ -100,13 +100,13 @@ instance Reunitable ExpF AnnExpF TyF where
       y <- reuniterAddBaseTy (TyFunF j x)
       _ <- reuniterConstrainEq y i
       pure (x, embedSpecTm (AnnExpAppF si sj))
-    ExpAbsF n mq mi -> do
-      x <- maybe reuniterFreshVar reuniterAddQuant mq
+    ExpAbsF n mt mi -> do
+      x <- maybe reuniterFreshVar reuniterAddGenTy mt
       (y, sy) <- reuniterBindTmVar n x mi
       pure (y, embedSpecTm (AnnExpAbsF n y sy))
-    ExpLetF n mq mi mj -> do
+    ExpLetF n mt mi mj -> do
       (i, si) <- mi
-      i' <- maybe (pure i) (reuniterAddQuant >=> reuniterConstrainEq i) mq
+      i' <- maybe (pure i) (reuniterAddGenTy >=> reuniterConstrainEq i) mt
       (y, sy) <- reuniterBindTmVar n i' mj
       pure (y, embedSpecTm (AnnExpLetF n i' si sy))
 

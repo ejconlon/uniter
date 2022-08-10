@@ -8,7 +8,7 @@ import Data.Foldable (toList)
 import Data.Kind (Type)
 import Data.Void (Void)
 import Uniter.Core (BoundId)
-import Uniter.Reunitable.Core (GenTy, Index, Quant, SpecTm, TmVar)
+import Uniter.Reunitable.Core (GenTy, Index, SpecTm, TmVar)
 import Uniter.Reunitable.Monad (ReuniterM, addBaseTy, addGenTy, bindTmVar, constrainEq, freshVar, resolveTmVar)
 
 -- | (There's really only one instance of this but we need to encapsulate the monad.)
@@ -43,9 +43,6 @@ class (Traversable g, Monad m) => MonadReuniter (g :: Type -> Type) (m :: Type -
   -- | Bind the type of the given term variable to a fresh metavar in the given scope.
   reuniterBindFreshTmVar :: TmVar -> m a -> m a
   reuniterBindFreshTmVar tmv m = reuniterFreshVar >>= \b -> reuniterBindTmVar tmv b m
-
-  reuniterAddQuant :: Quant g -> m BoundId
-  reuniterAddQuant = undefined
 
 instance (Traversable g) => MonadReuniter g (ReuniterM Void g) where
   reuniterAddBaseTy = addBaseTy
