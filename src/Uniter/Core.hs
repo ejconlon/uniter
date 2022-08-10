@@ -1,7 +1,11 @@
 {-# LANGUAGE UndecidableInstances #-}
 
 module Uniter.Core
-  ( BoundId (..)
+  ( UniqueId (..)
+  , MetaVar (..)
+  , SkolemVar (..)
+  , SynVar (..)
+  , synVarUniqueId
   , Node
   , Event (..)
   , Index (..)
@@ -39,18 +43,40 @@ import qualified Data.Sequence as Seq
 import Data.String (IsString)
 import Data.Text (Text)
 
--- | An opaque vertex ID in our graph representation
-newtype BoundId = BoundId { unBoundId :: Int }
+-- | A unique ID for generating distinct synthetic vars
+newtype UniqueId = UniqueId { unUniqueId :: Int }
   deriving stock (Show)
   deriving newtype (Eq, Ord, Enum)
 
--- | A 'Node' is a structure with all the holes filled with 'BoundId's.
-type Node g = g BoundId
+-- | A meta variable representing an unknown type
+newtype MetaVar = MetaVar { unMetaVar :: UniqueId }
+  deriving stock (Show)
+  deriving newtype (Eq, Ord, Enum)
+
+-- | A Skolem variable representing a type bound by a forall
+data SkolemVar = SkolemVar
+  { svUnique :: !UniqueId
+  , svName :: !TyVar
+  } deriving stock (Eq, Ord, Show)
+
+-- | A "synthetic" variable representing one of the two var types
+data SynVar =
+    SynVarMeta !MetaVar
+  | SynVarSkolem !SkolemVar
+  deriving stock (Eq, Ord, Show)
+
+synVarUniqueId :: SynVar -> UniqueId
+synVarUniqueId = \case
+  SynVarMeta (MetaVar u) -> u
+  SynVarSkolem (SkolemVar u _) -> u
+
+-- | A 'Node' is a structure with all the holes filled with 'SynVar's.
+type Node g = g SynVar
 
 data Event g =
-    EventAddNode !(Node g) !BoundId
-  | EventConstrainEq !BoundId !BoundId !BoundId
-  | EventFreshVar !BoundId
+    EventAddNode !(Node g) !SynVar
+  | EventConstrainEq !SynVar !SynVar !SynVar
+  | EventFreshVar !SynVar
 
 deriving instance Eq (Node g) => Eq (Event g)
 deriving instance Ord (Node g) => Ord (Event g)
@@ -130,7 +156,7 @@ instance Bitraversable h => Bitraversable (SpecTmF h) where
 -- | A "specializing term" - contains the term constructors of 'h' but also
 -- a constructor for type specialization (binds free type vars)
 -- The second type parameter is the thing bound - usually this will
--- come out of unification as a metavariable ('BoundId') but will eventually be
+-- come out of unification as a metavariable ('SynVar') but will eventually be
 -- traversed to replace with actual types.
 -- 'h' here is usually the base functor of your final expression type.
 newtype SpecTm (h :: Type -> Type -> Type) (a :: Type) =

@@ -2,14 +2,14 @@ module Test.Uniter.Main (main) where
 
 import Data.Bifunctor (bimap, first)
 import Data.Char (chr, ord)
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 import Data.Semigroup (Max)
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
+import Data.Set (Set)
+import qualified Data.Set as Set
 import Data.Void (Void)
-import IntLike.Map (IntLikeMap)
-import qualified IntLike.Map as ILM
-import IntLike.Set (IntLikeSet)
-import qualified IntLike.Set as ILS
 import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
 import Uniter.Core (Index (..), Level (..), tupleToPair)
@@ -23,7 +23,7 @@ import Uniter.UnionMap (Changed (..), UnionEquiv (..), UnionMap, UnionMapAddVal 
 import Uniter.Unitable.Driver (quickUniteResult)
 
 newtype V = V { unV :: Int }
-  deriving newtype (Eq)
+  deriving newtype (Eq, Ord)
   deriving stock (Show)
 
 toV :: Char -> V
@@ -32,17 +32,17 @@ toV = V . ord
 fromV :: V -> Char
 fromV = chr . unV
 
-setV :: String -> IntLikeSet V
-setV = ILS.fromList . fmap toV
+setV :: String -> Set V
+setV = Set.fromList . fmap toV
 
-mapV :: [(Char, a)] -> IntLikeMap V a
-mapV = ILM.fromList . fmap (first toV)
+mapV :: [(Char, a)] -> Map V a
+mapV = Map.fromList . fmap (first toV)
 
-mapVV :: [(Char, Char)] -> IntLikeMap V V
-mapVV = ILM.fromList . fmap (bimap toV toV)
+mapVV :: [(Char, Char)] -> Map V V
+mapVV = Map.fromList . fmap (bimap toV toV)
 
-multiMapVV :: [(Char, String)] -> IntLikeMap V (IntLikeSet V)
-multiMapVV = ILM.fromList . fmap (bimap toV setV)
+multiMapVV :: [(Char, String)] -> Map V (Set V)
+multiMapVV = Map.fromList . fmap (bimap toV setV)
 
 type UMV = UnionMap V (Max Int)
 

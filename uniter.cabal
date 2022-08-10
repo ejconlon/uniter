@@ -79,7 +79,6 @@ library
     , bifunctors ==5.5.*
     , containers ==0.6.*
     , exceptions ==0.10.*
-    , int-like ==0.1.*
     , microlens ==0.4.*
     , microlens-mtl ==0.2.*
     , mtl ==2.2.*
@@ -129,7 +128,6 @@ executable uniter-example
     , bifunctors ==5.5.*
     , containers ==0.6.*
     , exceptions ==0.10.*
-    , int-like ==0.1.*
     , microlens ==0.4.*
     , microlens-mtl ==0.2.*
     , mtl ==2.2.*
@@ -183,7 +181,6 @@ test-suite uniter-test
     , bifunctors ==5.5.*
     , containers ==0.6.*
     , exceptions ==0.10.*
-    , int-like ==0.1.*
     , microlens ==0.4.*
     , microlens-mtl ==0.2.*
     , mtl ==2.2.*

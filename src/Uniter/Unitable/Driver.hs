@@ -14,7 +14,7 @@ import Data.Functor.Foldable (Base, Corecursive, Recursive)
 import qualified Data.Map.Strict as Map
 import Data.Typeable (Typeable)
 import Uniter.Align (Alignable)
-import Uniter.Core (BoundId (..), Node)
+import Uniter.Core (Node, SynVar (..))
 import Uniter.Graph (Graph, resolveVar)
 import Uniter.PreGraph (PreGraph (..))
 import Uniter.Process (ProcessErr, RebindMap, embedReuniterM, extract, newProcessState, runProcessM)
@@ -23,14 +23,14 @@ import Uniter.Unitable.Class (Unitable, uniteTerm)
 
 data UniteErr e g =
     UniteErrProcess !(ProcessErr e)
-  | UniteErrExtract !BoundId !BoundId !RebindMap !(Graph g)
+  | UniteErrExtract !SynVar !SynVar !RebindMap !(Graph g)
 
 deriving instance (Eq e, Eq (Node g)) => Eq (UniteErr e g)
 deriving instance (Show e, Show (Node g)) => Show (UniteErr e g)
 
 instance (Show e, Show (Node g), Typeable e, Typeable g) => Exception (UniteErr e g)
 
-data UniteSuccess g u = UniteSuccess !BoundId !u !RebindMap !(Graph g)
+data UniteSuccess g u = UniteSuccess !SynVar !u !RebindMap !(Graph g)
   deriving stock (Functor, Foldable, Traversable)
 
 deriving instance (Eq (Node g), Eq u) => Eq (UniteSuccess g u)
@@ -49,7 +49,7 @@ quickUniteResult t =
     Left e -> throwM e
     Right (UniteSuccess _ u _ _) -> pure u
 
-driveUniteResult :: (Corecursive u, Base u ~ g, Alignable e g) => ReuniterM g BoundId -> (PreGraph g, UniteResult e g u)
+driveUniteResult :: (Corecursive u, Base u ~ g, Alignable e g) => ReuniterM g SynVar -> (PreGraph g, UniteResult e g u)
 driveUniteResult act =
   let fm = Map.empty
       uniq = toEnum 0

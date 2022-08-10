@@ -5,28 +5,28 @@ module Uniter.Unitable.Class
   ) where
 
 import Data.Functor.Foldable (Base, Recursive (..))
-import Uniter.Core (BoundId, TmVar, dummySpecTm)
-import Uniter.Reunitable.Monad (ReuniterM, addBaseTy, bindTmVar, constrainEq, freshVar, resolveTmVar)
+import Uniter.Core (SynVar, TmVar, dummySpecTm)
+import Uniter.Reunitable.Monad (ReuniterM, addBaseTy, bindTmVar, constrainEq, freshMetaVar, resolveTmVar)
 
 class (Traversable g, Monad m) => MonadUniter g m | m -> g where
   -- | Allocate an ID for the given base type.
-  uniterAddBaseTy :: g BoundId -> m BoundId
+  uniterAddBaseTy :: g SynVar -> m SynVar
 
   -- | Allocate a fresh ID.
-  uniterFreshVar :: m BoundId
+  uniterFreshVar :: m SynVar
 
   -- | Emit equality constraints on two IDs.
-  uniterConstrainEq :: BoundId -> BoundId -> m BoundId
+  uniterConstrainEq :: SynVar -> SynVar -> m SynVar
 
   -- | Bind the type of the given term variable in the given scope.
-  uniterBindTmVar :: TmVar -> BoundId -> m a -> m a
+  uniterBindTmVar :: TmVar -> SynVar -> m a -> m a
 
   -- | Lookup the type metavar of the given term variable in the given scope
-  uniterResolveTmVar :: TmVar -> m BoundId
+  uniterResolveTmVar :: TmVar -> m SynVar
 
 instance Traversable g => MonadUniter g (ReuniterM g) where
   uniterAddBaseTy = addBaseTy
-  uniterFreshVar = freshVar
+  uniterFreshVar = freshMetaVar
   uniterConstrainEq = constrainEq
   uniterBindTmVar = bindTmVar
   uniterResolveTmVar v = fmap fst (resolveTmVar v dummySpecTm (const dummySpecTm))
@@ -40,8 +40,8 @@ class (Traversable f, Traversable g) => Unitable f g | f -> g where
   -- | Inspects the expression functor, performing effects to
   -- allocate fresh unification vars, introduce equalities, and add nodes to the graph,
   -- returning the ID associated with this value.
-  unite :: MonadUniter g m => f (m BoundId) -> m BoundId
+  unite :: MonadUniter g m => f (m SynVar) -> m SynVar
 
 -- | Perform unification bottom-up on a 'Recursive' term.
-uniteTerm :: (Recursive t, Base t ~ f, Unitable f g, MonadUniter g m) => t -> m BoundId
+uniteTerm :: (Recursive t, Base t ~ f, Unitable f g, MonadUniter g m) => t -> m SynVar
 uniteTerm = cata unite
