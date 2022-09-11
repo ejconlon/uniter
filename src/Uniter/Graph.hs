@@ -22,7 +22,7 @@ import Control.Exception (Exception)
 import Control.Monad ((>=>))
 import Control.Monad.Except (Except, MonadError (..), runExcept)
 import Control.Monad.Reader (MonadReader (..), ReaderT (..))
-import Control.Monad.State.Strict (MonadState, StateT (..), evalStateT, gets, modify')
+import Control.Monad.State.Strict (MonadState (..), StateT (..), evalStateT, gets, modify')
 import Control.Monad.Trans.Writer.Strict (WriterT (..))
 import Data.Bifunctor (Bifunctor (..), second)
 import Data.Bitraversable (Bitraversable (..))
@@ -38,8 +38,8 @@ import IntLike.Set (IntLikeSet)
 import qualified IntLike.Set as ILS
 import Lens.Micro (Traversal')
 import Prelude hiding (lookup)
-import Uniter.Core (BoundTy (..), BoundTyF (..), ForAll (..), GenBinder, GenQuant, Index (..), Node, Quant (..), SpecTm,
-                    TyVar, UniqueId (..), embedBoundTy)
+import Uniter.Core (BoundTy (..), BoundTyF (..), ForAll (..), GenBinder (..), GenQuant, Index (..), Node, Quant (..),
+                    SpecTm, TyVar, UniqueId (..), embedBoundTy)
 import Uniter.PreGraph (PreElem (..), PreGraph)
 import qualified Uniter.PreGraph as UP
 
@@ -146,6 +146,14 @@ newtype ComplexResM g a = ComplexResM { unComplexResM :: ReaderT (ResEnv g) (Sta
 runComplexResM :: ComplexResM g a -> Graph g -> Either ComplexResErr a
 runComplexResM m gr = fmap fst (runExcept (runStateT (runReaderT (unComplexResM m) (ResEnv gr ILS.empty)) (ComplexResSt ILM.empty Empty)))
 
+newVarM :: UniqueId -> Maybe TyVar -> ComplexResM g (BoundTy ResIndex g, Set ResIndex)
+newVarM v mayVar = do
+  ix <- state $ \st ->
+    let ix = ResIndex (Seq.length (crsVars st))
+        st' = st { crsVars = crsVars st :|> GenBinder v mayVar }
+      in (ix, st')
+  pure (BoundTy (BoundTyVarBoundF ix), Set.singleton ix)
+
 resolveGenVarM :: Traversable g => UniqueId -> ComplexResM g (BoundTy ResIndex g, Set ResIndex)
 resolveGenVarM v = do
   mw <- gets (ILM.lookup v . crsCache)
@@ -160,8 +168,8 @@ resolveGenVarM v = do
           Just j -> do
             p <- case j of
               ElemNode x -> local (\re -> re { rePath = ILS.insert v (rePath re) }) (resolveGenNodeM x)
-              ElemMeta -> error "TODO"
-              ElemSkolem _tyv -> error "TODO"
+              ElemMeta -> newVarM v Nothing
+              ElemSkolem tyv -> newVarM v (Just tyv)
             modify' (\st -> st { crsCache = ILM.insert v p (crsCache st) })
             pure p
 
