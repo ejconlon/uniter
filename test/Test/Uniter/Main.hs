@@ -15,11 +15,12 @@ import qualified IntLike.Set as ILS
 import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
 import Uniter.Core (Index (..), Level (..), recGenQuant, recSpecTm, tupleToPair)
+import Uniter.Example.Complex (InferCase (..), inferCases, inferWithFunDefs)
 import qualified Uniter.Example.Complex as Complex
 import qualified Uniter.Example.Simple as Simple
 import Uniter.OrderedMap (OrderedMap)
 import qualified Uniter.OrderedMap as OM
-import Uniter.Reunitable.Driver (quickReuniteResult)
+import Uniter.Reunitable.Driver (ReuniteSuccess (..), quickReuniteResult)
 import Uniter.UnionMap (Changed (..), UnionEquiv (..), UnionMap, UnionMapAddVal (..), UnionMapLookupVal (..),
                         UnionMapMergeVal (..), UnionMapTraceRes (..), UnionMergeOne, addUnionMapM, concatUnionMergeOne,
                         emptyUnionMap, equivUnionMapM, lookupUnionMapM, mergeOneUnionMapM, sizeUnionMap, traceUnionMap,
@@ -236,10 +237,28 @@ testExampleComplex = testUnit "complex example" $ do
   actualLinTm === recSpecTm expLinTm
   actualLinTy === recGenQuant expLinTy
 
+runInferCase :: InferCase -> TestTree
+runInferCase (InferCase name tm expected) = testUnit name $ do
+  case inferWithFunDefs tm of
+    Right (ReuniteSuccess _ actualRecon actualTy _) ->
+      case expected of
+        Just (expectedRecon, expectedTy) -> do
+          actualRecon === expectedRecon
+          actualTy === expectedTy
+        Nothing -> fail "expected failure but was success"
+    Left failure ->
+      case expected of
+        Just _ -> fail ("expected success but was failure: " ++ show failure)
+        Nothing -> pure ()
+
+testComplexCases :: TestTree
+testComplexCases = testGroup "complex cases" (fmap runInferCase inferCases)
+
 main :: IO ()
 main = testMain $ \_ -> testGroup "Uniter"
   [ testUmUnit
   , testOmUnit
   , testExampleSimple
   , testExampleComplex
+  , testComplexCases
   ]

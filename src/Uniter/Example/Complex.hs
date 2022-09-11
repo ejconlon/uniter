@@ -10,6 +10,10 @@ module Uniter.Example.Complex
   , AnnExpF (..)
   , exampleLinear
   , exampleExponential
+  , funDefs
+  , InferCase (..)
+  , inferCases
+  , inferWithFunDefs
   , processVerbose
   , main
   ) where
@@ -23,8 +27,8 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
-import Uniter (Alignable (..), GenQuant, SrcQuant, UnalignableErr (..), bareQuant, embedBoundTy, forAllQuant,
-               varBoundTy)
+import Uniter (Alignable (..), GenQuant, SpecTm, SrcQuant, UnalignableErr (..), bareQuant, embedBoundTy, forAllQuant,
+               recSpecTm, varBoundTy)
 import Uniter.Core (Index, TmVar, embedSpecTm)
 import Uniter.Render (writeGraphDot, writePreGraphDot)
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
@@ -187,14 +191,14 @@ funDefs = Map.fromList
 data InferCase = InferCase
   { icName :: !String
   , icTm :: !Exp
-  , icExpected :: !(Maybe (AnnExp (GenQuant TyF), GenQuant TyF))
+  , icExpected :: !(Maybe (SpecTm AnnExpF (GenQuant TyF), GenQuant TyF))
   } deriving stock (Eq, Show)
 
 inferCases :: [InferCase]
 inferCases =
-  [ InferCase "zero" (ExpFree "zero") (Just (AnnExpFree "zero", bareQuant TyInt))
-  , InferCase "succ" (ExpFree "succ") (Just (AnnExpFree "succ", bareQuant (TyFun TyInt TyInt)))
-  , InferCase "succ zero" (ExpApp (ExpFree "succ") (ExpFree "zero")) (Just (AnnExpApp (AnnExpFree "succ") (AnnExpFree "zero"), bareQuant TyInt))
+  [ InferCase "zero" (ExpFree "zero") (Just (recSpecTm (AnnExpFree "zero"), bareQuant TyInt))
+  , InferCase "succ" (ExpFree "succ") (Just (recSpecTm (AnnExpFree "succ"), bareQuant (TyFun TyInt TyInt)))
+  , InferCase "succ zero" (ExpApp (ExpFree "succ") (ExpFree "zero")) (Just (recSpecTm (AnnExpApp (AnnExpFree "succ") (AnnExpFree "zero")), bareQuant TyInt))
   ]
 
 inferWithFunDefs :: Exp -> ReuniteResult UnalignableErr AnnExpF TyF

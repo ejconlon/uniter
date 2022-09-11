@@ -12,7 +12,6 @@ import Control.Monad.Catch (MonadThrow (..))
 import Data.Either (fromRight)
 import Data.Functor.Foldable (Base, Corecursive, Recursive)
 import Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
 import Data.Typeable (Typeable)
 import Uniter.Align (Alignable)
 import Uniter.Core (Node, TmVar, UniqueId, bareQuant)
