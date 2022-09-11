@@ -152,7 +152,7 @@ newVarM v mayVar = do
     let ix = ResIndex (Seq.length (crsVars st))
         st' = st { crsVars = crsVars st :|> GenBinder v mayVar }
       in (ix, st')
-  pure (BoundTy (BoundTyVarBoundF ix), Set.singleton ix)
+  pure (BoundTy (BoundTyVarF ix), Set.singleton ix)
 
 resolveGenVarM :: Traversable g => UniqueId -> ComplexResM g (BoundTy ResIndex g, Set ResIndex)
 resolveGenVarM v = do
@@ -182,7 +182,7 @@ resolveGenNodeM = fmap (first embedBoundTy) . traverseWriter resolveGenVarM
 reindex :: Functor g => (i -> j) -> BoundTy i g -> BoundTy j g
 reindex f = go where
   go (BoundTy bt) = BoundTy $ case bt of
-    BoundTyVarBoundF i -> BoundTyVarBoundF (f i)
+    BoundTyVarF i -> BoundTyVarF (f i)
     BoundTyEmbedF gbt -> BoundTyEmbedF (fmap go gbt)
 
 abstractM :: Traversable g => BoundTy ResIndex g -> Set ResIndex -> ComplexResM g (GenQuant g)

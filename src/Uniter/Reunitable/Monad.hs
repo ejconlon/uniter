@@ -103,7 +103,7 @@ addSrcQuant = \case
 addBoundTy :: Traversable g => Seq UniqueId -> BoundTy Index g -> ReuniterM g UniqueId
 addBoundTy tyVars = go where
   go (BoundTy gf) = case gf of
-    BoundTyVarBoundF ix@(Index i) ->
+    BoundTyVarF ix@(Index i) ->
       case Seq.lookup i tyVars of
         Nothing -> throwError (ReuniterErrMissingTyVar ix)
         Just u -> pure u

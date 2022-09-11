@@ -11,6 +11,8 @@ module Uniter.Core
   , Var (..)
   , ForAll (..)
   , Quant (..)
+  , bareQuant
+  , forAllQuant
   , Pair (..)
   , pairToTuple
   , tupleToPair
@@ -22,6 +24,7 @@ module Uniter.Core
   , BoundTy (..)
   , BoundTyF (..)
   , recBoundTy
+  , varBoundTy
   , embedBoundTy
   , SrcQuant
   , recSrcQuant
@@ -103,6 +106,12 @@ data Quant (b :: Type) (a :: Type) =
     QuantBare !a
   | QuantForAll !(ForAll b a)
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
+
+bareQuant :: (Recursive u, Base u ~ g) => u -> Quant b (BoundTy i g)
+bareQuant = QuantBare . recBoundTy
+
+forAllQuant :: Seq b -> BoundTy i g -> Quant b (BoundTy i g)
+forAllQuant vs bt = QuantForAll (ForAll vs bt)
 
 -- | A strict tuple
 data Pair k v = Pair
@@ -196,18 +205,16 @@ bindSpecTm ps s@(SpecTm x) = case x of
 -- | A "bound" type - includes all the given type constructors plus one
 -- for type variables.
 data BoundTyF (i :: Type) (g :: Type -> Type) (r :: Type) =
-    BoundTyVarBoundF !i
-  -- | BoundTyVarFreeF !TyVar
+    BoundTyVarF !i
   | BoundTyEmbedF !(g r)
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
 
-shiftBoundTyF :: Functor g => (r -> r) -> Int -> BoundTyF Index g r -> BoundTyF Index g r
-shiftBoundTyF f j = if j == 0 then id else go where
-  go gt =
-    case gt of
-      BoundTyVarBoundF (Index i) -> BoundTyVarBoundF (Index (i + j))
-      -- BoundTyVarFreeF _ -> gt
-      BoundTyEmbedF gr -> BoundTyEmbedF (fmap f gr)
+-- shiftBoundTyF :: Functor g => (r -> r) -> Int -> BoundTyF Index g r -> BoundTyF Index g r
+-- shiftBoundTyF f j = if j == 0 then id else go where
+--   go gt =
+--     case gt of
+--       BoundTyVarF (Index i) -> BoundTyVarF (Index (i + j))
+--       BoundTyEmbedF gr -> BoundTyEmbedF (fmap f gr)
 
 newtype BoundTy (i :: Type) (g :: Type -> Type) = BoundTy { unBoundTy :: BoundTyF i g (BoundTy i g) }
 
@@ -215,9 +222,12 @@ deriving stock instance (Eq i, Eq (g (BoundTy i g))) => (Eq (BoundTy i g))
 deriving stock instance (Ord i, Ord (g (BoundTy i g))) => (Ord (BoundTy i g))
 deriving stock instance (Show i, Show (g (BoundTy i g))) => (Show (BoundTy i g))
 
-shiftBoundTy :: Functor g => Int -> BoundTy Index g -> BoundTy Index g
-shiftBoundTy j = go where
-  go = BoundTy . shiftBoundTyF go j . unBoundTy
+-- shiftBoundTy :: Functor g => Int -> BoundTy Index g -> BoundTy Index g
+-- shiftBoundTy j = go where
+--   go = BoundTy . shiftBoundTyF go j . unBoundTy
+
+varBoundTy :: i -> BoundTy i g
+varBoundTy = BoundTy . BoundTyVarF
 
 recBoundTy :: (Recursive u, Base u ~ g) => u -> BoundTy i g
 recBoundTy = cata embedBoundTy

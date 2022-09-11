@@ -18,9 +18,13 @@ import Control.Monad (void, (>=>))
 import Control.Monad.Catch (MonadThrow (..))
 import Data.Bifunctor.TH (deriveBifoldable, deriveBifunctor, deriveBitraversable)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
+import Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
+import qualified Data.Sequence as Seq
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
-import Uniter (Alignable (..), GenQuant, SrcQuant, UnalignableErr (..))
+import Uniter (Alignable (..), GenQuant, SrcQuant, UnalignableErr (..), bareQuant, embedBoundTy, forAllQuant,
+               varBoundTy)
 import Uniter.Core (Index, TmVar, embedSpecTm)
 import Uniter.Render (writeGraphDot, writePreGraphDot)
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
@@ -169,6 +173,16 @@ exampleExponential =
       x4 = ExpLet "v4" Nothing (ExpTuple (ExpSecond (ExpFree "v3")) (ExpTuple (ExpFree "v2") (ExpFree "v2"))) x5
       x5 = ExpFree "v4"
   in x1
+
+-- | Some examples of functions (including polymorphic ones)
+funDefs :: Map TmVar (SrcQuant TyF)
+funDefs = Map.fromList
+  [ ("undefined", forAllQuant (Seq.fromList ["a"]) (varBoundTy 0))
+  , ("id", forAllQuant (Seq.fromList ["a"]) (embedBoundTy (TyFunF (varBoundTy 0) (varBoundTy 0))))
+  , ("const", forAllQuant (Seq.fromList ["a", "b"]) (embedBoundTy (TyFunF (varBoundTy 0) (embedBoundTy (TyFunF (varBoundTy 1) (varBoundTy 0))))))
+  , ("zero", bareQuant TyInt)
+  , ("succ", bareQuant (TyFun TyInt TyInt))
+  ]
 
 -- | A complete example of how to infer the type of an expression
 -- with unification through 'Unitable' and 'Alignable'.
