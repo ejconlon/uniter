@@ -227,14 +227,13 @@ testExampleSimple = testUnit "simple example" $ do
 testExampleComplex :: TestTree
 testExampleComplex = testUnit "complex example" $ do
   let x1 = Complex.AnnExpLet "v1" Complex.TyInt (Complex.AnnExpInt 1) x2
-      x2 = Complex.AnnExpLet "v2" (Complex.TyPair Complex.TyInt Complex.TyInt) (Complex.AnnExpTuple (Complex.AnnExpBound 1) (Complex.AnnExpBound 1)) x3
-      x3 = Complex.AnnExpLet "v3" (Complex.TyPair Complex.TyInt Complex.TyInt) (Complex.AnnExpTuple (Complex.AnnExpSecond (Complex.AnnExpBound 1)) (Complex.AnnExpFirst (Complex.AnnExpBound 1))) x4
+      x2 = Complex.AnnExpLet "v2" (Complex.TyPair Complex.TyInt Complex.TyInt) (Complex.AnnExpTuple (Complex.AnnExpBound 0) (Complex.AnnExpBound 0)) x3
+      x3 = Complex.AnnExpLet "v3" (Complex.TyPair Complex.TyInt Complex.TyInt) (Complex.AnnExpTuple (Complex.AnnExpSecond (Complex.AnnExpBound 0)) (Complex.AnnExpFirst (Complex.AnnExpBound 0))) x4
       x4 = Complex.AnnExpBound 0
   let expLinTm = x1
       expLinTy = Complex.TyPair Complex.TyInt Complex.TyInt
   (actualLinTm, actualLinTy) <- quickReuniteResult Complex.exampleLinear
-  -- TODO FIX BOUND VARIABLES!
-  -- actualLinTm === recSpecTm expLinTm
+  actualLinTm === recSpecTm expLinTm
   actualLinTy === expLinTy
 
 main :: IO ()
