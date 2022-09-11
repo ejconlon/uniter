@@ -34,16 +34,16 @@ import Uniter.PreGraph (PreElem (..), PreGraph (..))
 import qualified Uniter.PreGraph as UP
 
 data ReuniterEnv g = ReuniterEnv
-  { reTmFree :: Map TmVar (Quant g)
+  { reTmFree :: !(Map TmVar (Quant TyVar (GenTy g)))
   -- ^ Map of tm var to type definition (static)
-  , reBound :: OrderedMap Var UniqueId
+  , reBound :: !(OrderedMap Var UniqueId)
   -- ^ Map of var to type metavars (scoped)
   }
 
 deriving instance Eq (g (GenTy g)) => Eq (ReuniterEnv g)
 deriving instance Show (g (GenTy g)) => Show (ReuniterEnv g)
 
-newReuniterEnv :: Map TmVar (Quant g) -> ReuniterEnv g
+newReuniterEnv :: Map TmVar (Quant TyVar (GenTy g)) -> ReuniterEnv g
 newReuniterEnv fm = ReuniterEnv fm OM.empty
 
 data ReuniterState g = ReuniterState
@@ -92,8 +92,8 @@ addBaseTy gb = withEvent (EventAddNode gb)
 
 addGenTy :: Traversable g => GenTy g -> ReuniterM g UniqueId
 addGenTy (GenTy gt) = case gt of
-  GenTyVarF tyv -> resolveTyVar tyv
   GenTyEmbedF gg -> traverse addGenTy gg >>= addBaseTy
+  _ -> error "TODO"
 
 freshMetaVar :: ReuniterM g UniqueId
 freshMetaVar = withEvent EventNewMetaVar

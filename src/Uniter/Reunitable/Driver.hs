@@ -17,8 +17,8 @@ import Data.Functor.Foldable (Base, Recursive)
 import qualified Data.Map.Strict as Map
 import Data.Typeable (Typeable)
 import Uniter.Align (Alignable)
-import Uniter.Core (GenTy, Node, SpecTm, UniqueId)
-import Uniter.Graph (Graph, ResolveErr, resolveGenVar, resolveTm)
+import Uniter.Core (GenQuant, GenTy, Node, SpecTm, UniqueId)
+import Uniter.Graph (ComplexResErr, Graph, resolveGenVar, resolveTm)
 import Uniter.PreGraph (PreGraph (..))
 import Uniter.Process (ProcessErr, embedReuniterM, extract, newProcessState, runProcessM)
 import Uniter.Reunitable.Class (Reunitable, reuniteTerm)
@@ -26,9 +26,9 @@ import Uniter.Reunitable.Monad (ReuniterM, newReuniterEnv, newReuniterState, pre
 
 data ReuniteErr e h g =
     ReuniteErrProcess !(ProcessErr e g)
-  | ReuniteErrExtractTy !UniqueId !(SpecTm h UniqueId) !ResolveErr !(Graph g)
+  | ReuniteErrExtractTy !UniqueId !(SpecTm h UniqueId) !ComplexResErr !(Graph g)
   -- ^ (id of type, reconstructed term, id of failed extract, graph)
-  | ReuniteErrExtractTm !UniqueId !(SpecTm h UniqueId) !(GenTy g) !ResolveErr !(Graph g)
+  | ReuniteErrExtractTm !UniqueId !(SpecTm h UniqueId) !(GenQuant g) !ComplexResErr !(Graph g)
   -- ^ (id of type, reconstructed term, id of failed extract, graph)
 
 deriving instance (Eq e, Eq (Node g), Eq (g (GenTy g)), Eq (h UniqueId (SpecTm h UniqueId))) => Eq (ReuniteErr e h g)
@@ -36,10 +36,10 @@ deriving instance (Show e, Show (Node g), Show (g (GenTy g)), Show (h UniqueId (
 
 instance (Show e, Show (Node g), Show (g (GenTy g)), Show (h UniqueId (SpecTm h UniqueId)), Typeable e, Typeable h, Typeable g) => Exception (ReuniteErr e h g)
 
-data ReuniteSuccess h g = ReuniteSuccess !UniqueId !(SpecTm h (GenTy g)) !(GenTy g) !(Graph g)
+data ReuniteSuccess h g = ReuniteSuccess !UniqueId !(SpecTm h (GenQuant g)) !(GenQuant g) !(Graph g)
 
-deriving instance (Eq (Node g), Eq (g (GenTy g)), Eq (h (GenTy g) (SpecTm h (GenTy g)))) => Eq (ReuniteSuccess h g)
-deriving instance (Show (Node g), Show (g (GenTy g)), Show (h (GenTy g) (SpecTm h (GenTy g)))) => Show (ReuniteSuccess h g)
+deriving instance (Eq (Node g), Eq (g (GenTy g)), Eq (h (GenQuant g) (SpecTm h (GenQuant g)))) => Eq (ReuniteSuccess h g)
+deriving instance (Show (Node g), Show (g (GenTy g)), Show (h (GenQuant g) (SpecTm h (GenQuant g)))) => Show (ReuniteSuccess h g)
 
 type ReuniteResult e h g = Either (ReuniteErr e h g) (ReuniteSuccess h g)
 
@@ -49,7 +49,7 @@ reuniteResult = driveReuniteResult . reuniteTerm
 
 quickReuniteResult ::
   (Recursive t, Base t ~ f, Reunitable f h g, Alignable e g, MonadThrow m,
-  Show e, Show (Node g), Show (g (GenTy g)), Show (h UniqueId (SpecTm h UniqueId)), Typeable e, Typeable g, Typeable h) => t -> m (SpecTm h (GenTy g), GenTy g)
+  Show e, Show (Node g), Show (g (GenTy g)), Show (h UniqueId (SpecTm h UniqueId)), Typeable e, Typeable g, Typeable h) => t -> m (SpecTm h (GenQuant g), GenQuant g)
 quickReuniteResult t =
   let r = snd (reuniteResult t)
   in case r of

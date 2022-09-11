@@ -20,7 +20,7 @@ import Data.Bifunctor.TH (deriveBifoldable, deriveBifunctor, deriveBitraversable
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
-import Uniter (Alignable (..), UnalignableErr (..))
+import Uniter (Alignable (..), GenQuant, UnalignableErr (..))
 import Uniter.Core (GenTy, Index, TmVar, embedSpecTm)
 import Uniter.Render (writeGraphDot, writePreGraphDot)
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
@@ -172,7 +172,7 @@ exampleExponential =
 
 -- | A complete example of how to infer the type of an expression
 -- with unification through 'Unitable' and 'Alignable'.
-processVerbose :: String -> Exp -> IO (GenTy TyF)
+processVerbose :: String -> Exp -> IO (GenQuant TyF)
 processVerbose name expr = go where
   go = do
     putStrLn ("*** Processing example: " ++ show name)

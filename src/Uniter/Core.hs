@@ -10,6 +10,7 @@ module Uniter.Core
   , TmVar (..)
   , Var (..)
   , ForAll (..)
+  , Quant (..)
   , Pair (..)
   , pairToTuple
   , tupleToPair
@@ -22,10 +23,10 @@ module Uniter.Core
   , GenTyF (..)
   , recGenTy
   , embedGenTy
-  , varGenTy
-  , closedGenTy
-  , Quant (..)
-  , forAllQuant
+  , freeGenTy
+  , GenBinder (..)
+  , GenQuant
+  , recGenQuant
   , DummyAnnTm (..)
   , dummySpecTm
   ) where
@@ -91,16 +92,16 @@ data Var =
   deriving stock (Eq, Ord, Show)
 
 -- | Something with universally quantified type variables
-data ForAll a = ForAll
-  { forAllBinders :: !(Seq TyVar)
+data ForAll b a = ForAll
+  { forAllBinders :: !(Seq b)
   , forAllBody :: !a
   } deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
 
--- -- | Something with existentially quantified type variables
--- data Exists a = Exists
---   { existsBinders :: !(Seq TyVar)
---   , existsBody :: !a
---   } deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
+-- | An optionally-quantified type
+data Quant (b :: Type) (a :: Type) =
+    QuantBare !a
+  | QuantForAll !(ForAll b a)
+  deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 -- | A strict tuple
 data Pair k v = Pair
@@ -194,9 +195,18 @@ bindSpecTm ps s@(SpecTm x) = case x of
 -- | A "generalized" type - includes all the given type constructors plus one
 -- for type variables.
 data GenTyF (g :: Type -> Type) (r :: Type) =
-    GenTyVarF !TyVar
+    GenTyVarBoundF !Index
+  | GenTyVarFreeF !TyVar
   | GenTyEmbedF !(g r)
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
+
+shiftGenTyF :: Functor g => (r -> r) -> Int -> GenTyF g r -> GenTyF g r
+shiftGenTyF f j = if j == 0 then id else go where
+  go gt =
+    case gt of
+      GenTyVarBoundF (Index i) -> GenTyVarBoundF (Index (i + j))
+      GenTyVarFreeF _ -> gt
+      GenTyEmbedF gr -> GenTyEmbedF (fmap f gr)
 
 newtype GenTy (g :: Type -> Type) = GenTy { unGenTy :: GenTyF g (GenTy g) }
 
@@ -204,17 +214,18 @@ deriving stock instance Eq (g (GenTy g)) => (Eq (GenTy g))
 deriving stock instance Ord (g (GenTy g)) => (Ord (GenTy g))
 deriving stock instance Show (g (GenTy g)) => (Show (GenTy g))
 
+shiftGenTy :: Functor g => Int -> GenTy g -> GenTy g
+shiftGenTy j = go where
+  go = GenTy . shiftGenTyF go j . unGenTy
+
 recGenTy :: (Recursive u, Base u ~ g) => u -> GenTy g
 recGenTy = cata embedGenTy
 
 embedGenTy :: g (GenTy g) -> GenTy g
 embedGenTy = GenTy . GenTyEmbedF
 
-varGenTy :: TyVar -> GenTy g
-varGenTy = GenTy . GenTyVarF
-
-closedGenTy :: (Base u ~ g, Recursive u) => u -> GenTy g
-closedGenTy = cata embedGenTy
+freeGenTy :: TyVar -> GenTy g
+freeGenTy = GenTy . GenTyVarFreeF
 
 type instance Base (GenTy g) = GenTyF g
 
@@ -224,21 +235,15 @@ instance Functor g => Recursive (GenTy g) where
 instance Functor g => Corecursive (GenTy g) where
   embed = GenTy
 
--- | A generalized type with optional quantification on the outside.
-data Quant (g :: Type -> Type) =
-    QuantBare !(GenTy g)
-  | QuantForAll !(ForAll (GenTy g))
-  -- | QuantExists !(Exists (GenTy g))
+data GenBinder = GenBinder
+  { gbUnique :: !UniqueId
+  , gbTyVar :: !(Maybe TyVar)
+  } deriving stock (Eq, Ord, Show)
 
-deriving stock instance Eq (g (GenTy g)) => (Eq (Quant g))
-deriving stock instance Ord (g (GenTy g)) => (Ord (Quant g))
-deriving stock instance Show (g (GenTy g)) => (Show (Quant g))
+type GenQuant g = Quant GenBinder (GenTy g)
 
-forAllQuant :: Seq TyVar -> GenTy g -> Quant g
-forAllQuant tyvs gt = if Seq.null tyvs then QuantBare gt else QuantForAll (ForAll tyvs gt)
-
--- existsQuant :: Seq TyVar -> GenTy g -> Quant g
--- existsQuant tyvs gt = if Seq.null tyvs then QuantBare gt else QuantExists (Exists tyvs gt)
+recGenQuant :: (Recursive u, Base u ~ g) => u -> GenQuant g
+recGenQuant = QuantBare . recGenTy
 
 data DummyAnnTm a r = DummyAnnTm
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)

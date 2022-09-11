@@ -15,7 +15,7 @@ import qualified Data.Map.Strict as Map
 import Data.Typeable (Typeable)
 import Uniter.Align (Alignable)
 import Uniter.Core (Node, UniqueId)
-import Uniter.Graph (Graph, ResolveErr, resolveVar)
+import Uniter.Graph (Graph, SimpleResErr, resolveVar)
 import Uniter.PreGraph (PreGraph (..))
 import Uniter.Process (ProcessErr, embedReuniterM, extract, newProcessState, runProcessM)
 import Uniter.Reunitable.Monad (ReuniterM, newReuniterEnv, newReuniterState, preGraph, runReuniterM)
@@ -23,7 +23,7 @@ import Uniter.Unitable.Class (Unitable, uniteTerm)
 
 data UniteErr e g =
     UniteErrProcess !(ProcessErr e g)
-  | UniteErrExtract !UniqueId !ResolveErr !(Graph g)
+  | UniteErrExtract !UniqueId !SimpleResErr !(Graph g)
 
 deriving instance (Eq e, Eq (Node g)) => Eq (UniteErr e g)
 deriving instance (Show e, Show (Node g)) => Show (UniteErr e g)
