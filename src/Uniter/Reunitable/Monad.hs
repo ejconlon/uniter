@@ -10,7 +10,7 @@ module Uniter.Reunitable.Monad
   , runReuniterM
   , constrainEq
   , addBaseTy
-  , addGenTy
+  , addSrcQuant
   , freshMetaVar
   , freshSkolemVar
   , bindTmVar
@@ -26,24 +26,25 @@ import Data.Bifunctor (first)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Sequence (Seq (..))
-import Uniter.Core (Event (..), ForAll (..), GenTy (..), GenTyF (..), Index, Node, Pair (..), Quant (..), SpecTm, TmVar,
-                    TyVar, UniqueId (..), Var (..), bindSpecTm)
+import qualified Data.Sequence as Seq
+import Uniter.Core (BoundTy (..), BoundTyF (..), Event (..), ForAll (..), Index (..), Node, Pair (..), Quant (..),
+                    SpecTm, SrcQuant, TmVar, TyVar, UniqueId (..), Var (..), bindSpecTm)
 import Uniter.OrderedMap (OrderedMap)
 import qualified Uniter.OrderedMap as OM
 import Uniter.PreGraph (PreElem (..), PreGraph (..))
 import qualified Uniter.PreGraph as UP
 
 data ReuniterEnv g = ReuniterEnv
-  { reTmFree :: !(Map TmVar (Quant TyVar (GenTy g)))
+  { reTmFree :: !(Map TmVar (SrcQuant g))
   -- ^ Map of tm var to type definition (static)
   , reBound :: !(OrderedMap Var UniqueId)
   -- ^ Map of var to type metavars (scoped)
   }
 
-deriving instance Eq (g (GenTy g)) => Eq (ReuniterEnv g)
-deriving instance Show (g (GenTy g)) => Show (ReuniterEnv g)
+deriving instance Eq (g (BoundTy Index g)) => Eq (ReuniterEnv g)
+deriving instance Show (g (BoundTy Index g)) => Show (ReuniterEnv g)
 
-newReuniterEnv :: Map TmVar (Quant TyVar (GenTy g)) -> ReuniterEnv g
+newReuniterEnv :: Map TmVar (SrcQuant g) -> ReuniterEnv g
 newReuniterEnv fm = ReuniterEnv fm OM.empty
 
 data ReuniterState g = ReuniterState
@@ -59,7 +60,9 @@ deriving instance Show (Node g) => Show (ReuniterState g)
 newReuniterState :: UniqueId -> ReuniterState f
 newReuniterState uniq = ReuniterState uniq Empty
 
-newtype ReuniterErr = ReuniterErrMissingVar Var
+data ReuniterErr =
+    ReuniterErrMissingVar !Var
+  | ReuniterErrMissingTyVar !Index
   deriving stock (Eq, Ord, Show)
 
 instance Exception ReuniterErr
@@ -90,10 +93,21 @@ constrainEq i j = withEvent (EventConstrainEq i j)
 addBaseTy :: Node g -> ReuniterM g UniqueId
 addBaseTy gb = withEvent (EventAddNode gb)
 
-addGenTy :: Traversable g => GenTy g -> ReuniterM g UniqueId
-addGenTy (GenTy gt) = case gt of
-  GenTyEmbedF gg -> traverse addGenTy gg >>= addBaseTy
-  _ -> error "TODO"
+addSrcQuant :: Traversable g => SrcQuant g -> ReuniterM g UniqueId
+addSrcQuant = \case
+  QuantBare g -> addBoundTy Empty g
+  QuantForAll (ForAll tyVars g) -> do
+    us <- traverse freshSkolemVar tyVars
+    addBoundTy us g
+
+addBoundTy :: Traversable g => Seq UniqueId -> BoundTy Index g -> ReuniterM g UniqueId
+addBoundTy tyVars = go where
+  go (BoundTy gf) = case gf of
+    BoundTyVarBoundF ix@(Index i) ->
+      case Seq.lookup i tyVars of
+        Nothing -> throwError (ReuniterErrMissingTyVar ix)
+        Just u -> pure u
+    BoundTyEmbedF g -> traverse go g >>= addBaseTy
 
 freshMetaVar :: ReuniterM g UniqueId
 freshMetaVar = withEvent EventNewMetaVar
@@ -147,13 +161,16 @@ resolveTmVarRaw tmv f = do
           case q of
             -- No new type binders
             QuantBare body -> do
-              addGenTy body >>= f Nothing
+              u <- addBoundTy Empty body
+              f Nothing u
             -- New type binders
             QuantForAll (ForAll tyvs body) -> do
               -- Allocate skolem vars for the instantiations of all type variables
               ps <- traverse (\tyv -> fmap (Pair tyv) (freshSkolemVar tyv)) tyvs
+              let us = fmap pairVal ps
+              u <- addBoundTy us body
               -- Bind metavars and apply function in the environment
-              (bodyId, bodySpec) <- bindAllTyVars ps (addGenTy body >>= f Nothing)
+              (bodyId, bodySpec) <- bindAllTyVars ps (f Nothing u)
               -- Create spec term
               let spec = bindSpecTm ps bodySpec
               pure (bodyId, spec)

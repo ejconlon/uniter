@@ -31,7 +31,7 @@ import IntLike.Map (IntLikeMap)
 import qualified IntLike.Map as ILM
 import Lens.Micro (lens)
 import Uniter.Align (Alignable (..))
-import Uniter.Core (Event (..), GenTy, Node, Quant, TmVar, TyVar, UniqueId (..))
+import Uniter.Core (Event (..), Node, SrcQuant, TmVar, TyVar, UniqueId (..))
 import Uniter.Graph (Elem (..), Graph (..), elemTraversal)
 import Uniter.Reunitable.Monad (ReuniterErr, ReuniterM, ReuniterState (..), newReuniterEnv, newReuniterState,
                                 runReuniterM)
@@ -211,7 +211,7 @@ handleEvent = \case
   EventNewMetaVar k -> defineP ElemMeta k
   EventNewSkolemVar tyv k -> defineP (ElemSkolem tyv) k
 
-embedReuniterM :: Alignable e g => Map TmVar (Quant TyVar (GenTy g)) -> ReuniterM g a -> ProcessM e g a
+embedReuniterM :: Alignable e g => Map TmVar (SrcQuant g) -> ReuniterM g a -> ProcessM e g a
 embedReuniterM fm m = do
   q <- gets psUnique
   let re = newReuniterEnv fm

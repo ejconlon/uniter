@@ -20,8 +20,8 @@ import Data.Bifunctor.TH (deriveBifoldable, deriveBifunctor, deriveBitraversable
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
-import Uniter (Alignable (..), GenQuant, UnalignableErr (..))
-import Uniter.Core (GenTy, Index, TmVar, embedSpecTm)
+import Uniter (Alignable (..), GenQuant, SrcQuant, UnalignableErr (..))
+import Uniter.Core (Index, TmVar, embedSpecTm)
 import Uniter.Render (writeGraphDot, writePreGraphDot)
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
 import Uniter.Reunitable.Driver (ReuniteSuccess (..), reuniteResult)
@@ -47,8 +47,8 @@ data Exp =
   | ExpFirst Exp
   | ExpSecond Exp
   | ExpApp Exp Exp
-  | ExpAbs !TmVar !(Maybe (GenTy TyF)) !Exp
-  | ExpLet !TmVar !(Maybe (GenTy TyF)) !Exp !Exp
+  | ExpAbs !TmVar !(Maybe (SrcQuant TyF)) !Exp
+  | ExpLet !TmVar !(Maybe (SrcQuant TyF)) !Exp !Exp
   deriving stock (Eq, Ord, Show)
 
 makeBaseFunctor ''Exp
@@ -142,12 +142,12 @@ instance Reunitable ExpF AnnExpF TyF where
       _ <- reuniterConstrainEq y i
       pure (x, embedSpecTm (AnnExpAppF si sj))
     ExpAbsF n mt mi -> do
-      x <- maybe reuniterFreshVar reuniterAddGenTy mt
+      x <- maybe reuniterFreshVar reuniterAddSrcQuant mt
       (y, sy) <- reuniterBindTmVar n x mi
       pure (y, embedSpecTm (AnnExpAbsF n y sy))
     ExpLetF n mt mi mj -> do
       (i, si) <- mi
-      i' <- maybe (pure i) (reuniterAddGenTy >=> reuniterConstrainEq i) mt
+      i' <- maybe (pure i) (reuniterAddSrcQuant >=> reuniterConstrainEq i) mt
       (y, sy) <- reuniterBindTmVar n i' mj
       pure (y, embedSpecTm (AnnExpLetF n i' si sy))
 

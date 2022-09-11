@@ -19,11 +19,12 @@ module Uniter.Core
   , recSpecTm
   , embedSpecTm
   , bindSpecTm
-  , GenTy (..)
-  , GenTyF (..)
-  , recGenTy
-  , embedGenTy
-  , freeGenTy
+  , BoundTy (..)
+  , BoundTyF (..)
+  , recBoundTy
+  , embedBoundTy
+  , SrcQuant
+  , recSrcQuant
   , GenBinder (..)
   , GenQuant
   , recGenQuant
@@ -192,58 +193,60 @@ bindSpecTm ps s@(SpecTm x) = case x of
   SpecTmEmbedF _ -> bindSpecTmF ps s
   SpecTmSpecF ps' s' -> bindSpecTmF (ps <> ps') s'
 
--- | A "generalized" type - includes all the given type constructors plus one
+-- | A "bound" type - includes all the given type constructors plus one
 -- for type variables.
-data GenTyF (g :: Type -> Type) (r :: Type) =
-    GenTyVarBoundF !Index
-  | GenTyVarFreeF !TyVar
-  | GenTyEmbedF !(g r)
+data BoundTyF (i :: Type) (g :: Type -> Type) (r :: Type) =
+    BoundTyVarBoundF !i
+  -- | BoundTyVarFreeF !TyVar
+  | BoundTyEmbedF !(g r)
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
 
-shiftGenTyF :: Functor g => (r -> r) -> Int -> GenTyF g r -> GenTyF g r
-shiftGenTyF f j = if j == 0 then id else go where
+shiftBoundTyF :: Functor g => (r -> r) -> Int -> BoundTyF Index g r -> BoundTyF Index g r
+shiftBoundTyF f j = if j == 0 then id else go where
   go gt =
     case gt of
-      GenTyVarBoundF (Index i) -> GenTyVarBoundF (Index (i + j))
-      GenTyVarFreeF _ -> gt
-      GenTyEmbedF gr -> GenTyEmbedF (fmap f gr)
+      BoundTyVarBoundF (Index i) -> BoundTyVarBoundF (Index (i + j))
+      -- BoundTyVarFreeF _ -> gt
+      BoundTyEmbedF gr -> BoundTyEmbedF (fmap f gr)
 
-newtype GenTy (g :: Type -> Type) = GenTy { unGenTy :: GenTyF g (GenTy g) }
+newtype BoundTy (i :: Type) (g :: Type -> Type) = BoundTy { unBoundTy :: BoundTyF i g (BoundTy i g) }
 
-deriving stock instance Eq (g (GenTy g)) => (Eq (GenTy g))
-deriving stock instance Ord (g (GenTy g)) => (Ord (GenTy g))
-deriving stock instance Show (g (GenTy g)) => (Show (GenTy g))
+deriving stock instance (Eq i, Eq (g (BoundTy i g))) => (Eq (BoundTy i g))
+deriving stock instance (Ord i, Ord (g (BoundTy i g))) => (Ord (BoundTy i g))
+deriving stock instance (Show i, Show (g (BoundTy i g))) => (Show (BoundTy i g))
 
-shiftGenTy :: Functor g => Int -> GenTy g -> GenTy g
-shiftGenTy j = go where
-  go = GenTy . shiftGenTyF go j . unGenTy
+shiftBoundTy :: Functor g => Int -> BoundTy Index g -> BoundTy Index g
+shiftBoundTy j = go where
+  go = BoundTy . shiftBoundTyF go j . unBoundTy
 
-recGenTy :: (Recursive u, Base u ~ g) => u -> GenTy g
-recGenTy = cata embedGenTy
+recBoundTy :: (Recursive u, Base u ~ g) => u -> BoundTy i g
+recBoundTy = cata embedBoundTy
 
-embedGenTy :: g (GenTy g) -> GenTy g
-embedGenTy = GenTy . GenTyEmbedF
+embedBoundTy :: g (BoundTy i g) -> BoundTy i g
+embedBoundTy = BoundTy . BoundTyEmbedF
 
-freeGenTy :: TyVar -> GenTy g
-freeGenTy = GenTy . GenTyVarFreeF
+type instance Base (BoundTy i g) = BoundTyF i g
 
-type instance Base (GenTy g) = GenTyF g
+instance Functor g => Recursive (BoundTy i g) where
+  project = unBoundTy
 
-instance Functor g => Recursive (GenTy g) where
-  project = unGenTy
+instance Functor g => Corecursive (BoundTy i g) where
+  embed = BoundTy
 
-instance Functor g => Corecursive (GenTy g) where
-  embed = GenTy
+type SrcQuant g = Quant TyVar (BoundTy Index g)
+
+recSrcQuant :: (Recursive u, Base u ~ g) => u -> SrcQuant g
+recSrcQuant = QuantBare . recBoundTy
 
 data GenBinder = GenBinder
   { gbUnique :: !UniqueId
   , gbTyVar :: !(Maybe TyVar)
   } deriving stock (Eq, Ord, Show)
 
-type GenQuant g = Quant GenBinder (GenTy g)
+type GenQuant g = Quant GenBinder (BoundTy Index g)
 
 recGenQuant :: (Recursive u, Base u ~ g) => u -> GenQuant g
-recGenQuant = QuantBare . recGenTy
+recGenQuant = QuantBare . recBoundTy
 
 data DummyAnnTm a r = DummyAnnTm
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)

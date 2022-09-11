@@ -8,16 +8,16 @@ import Data.Bitraversable (Bitraversable)
 import Data.Foldable (toList)
 import Data.Functor.Foldable (Base, Recursive (..))
 import Data.Kind (Type)
-import Uniter.Core (GenTy, Index, Node, SpecTm, TmVar, UniqueId)
-import Uniter.Reunitable.Monad (ReuniterM, addBaseTy, addGenTy, bindTmVar, constrainEq, freshMetaVar, resolveTmVar)
+import Uniter.Core (Index, Node, SpecTm, SrcQuant, TmVar, UniqueId)
+import Uniter.Reunitable.Monad (ReuniterM, addBaseTy, addSrcQuant, bindTmVar, constrainEq, freshMetaVar, resolveTmVar)
 
 -- | (There's really only one instance of this but we need to encapsulate the monad.)
 class (Traversable g, Monad m) => MonadReuniter (g :: Type -> Type) (m :: Type -> Type) | m -> g where
   -- | Allocate an ID for the given base type.
   reuniterAddBaseTy :: Node g -> m UniqueId
 
-  -- | Allocate an ID for the given generalized type (recursing bottom-up on individual nodes and resolving vars as needed)
-  reuniterAddGenTy :: GenTy g -> m UniqueId
+  -- | Allocate an ID for the given polytype (recursing bottom-up on individual nodes and resolving vars as needed)
+  reuniterAddSrcQuant :: SrcQuant g -> m UniqueId
 
   -- | Allocate a fresh ID.
   reuniterFreshVar :: m UniqueId
@@ -46,7 +46,7 @@ class (Traversable g, Monad m) => MonadReuniter (g :: Type -> Type) (m :: Type -
 
 instance Traversable g => MonadReuniter g (ReuniterM g) where
   reuniterAddBaseTy = addBaseTy
-  reuniterAddGenTy = addGenTy
+  reuniterAddSrcQuant = addSrcQuant
   reuniterFreshVar = freshMetaVar
   reuniterConstrainEq = constrainEq
   reuniterResolveTmVar = resolveTmVar
