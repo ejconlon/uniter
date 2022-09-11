@@ -127,7 +127,7 @@ processVerbose name expr = go where
     putStrLn "--- Expression:"
     pPrint expr
     let (pg, res) = uniteResult mempty expr
-    writePreGraphDot ("dot/" ++ name ++ "-initial.dot") pg
+    writePreGraphDot ("dot/output/" ++ name ++ "-initial.dot") pg
     case res of
       Left e -> do
         putStrLn "--- Failure"
@@ -139,7 +139,7 @@ processVerbose name expr = go where
         pPrint ty
         pure ty
   goVerbose bid g = do
-    writeGraphDot ("dot/" ++ name ++ "-processed.dot") g
+    writeGraphDot ("dot/output/" ++ name ++ "-processed.dot") g
     putStrLn ("--- Expr id: " ++ show bid)
     putStrLn "--- Final graph:"
     pPrint g

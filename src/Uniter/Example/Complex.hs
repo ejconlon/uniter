@@ -27,8 +27,8 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
-import Uniter (Alignable (..), GenQuant, SpecTm, SrcQuant, UnalignableErr (..), bareQuant, embedBoundTy, forAllQuant,
-               recSpecTm, varBoundTy)
+import Uniter (Alignable (..), GenQuant, SpecTm, SrcQuant, UnalignableErr (..), bareQuant, bindSpecTm, embedBoundTy,
+               forAllQuant, recSpecTm, varBoundTy)
 import Uniter.Core (Index, TmVar, embedSpecTm)
 import Uniter.Render (writeGraphDot, writePreGraphDot)
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
@@ -199,6 +199,14 @@ inferCases =
   [ InferCase "zero" (ExpFree "zero") (Just (recSpecTm (AnnExpFree "zero"), bareQuant TyInt))
   , InferCase "succ" (ExpFree "succ") (Just (recSpecTm (AnnExpFree "succ"), bareQuant (TyFun TyInt TyInt)))
   , InferCase "succ zero" (ExpApp (ExpFree "succ") (ExpFree "zero")) (Just (recSpecTm (AnnExpApp (AnnExpFree "succ") (AnnExpFree "zero")), bareQuant TyInt))
+  -- TODO fix this case: free vars should have their tyvars inserted as (named) metavars, not skolem vars, because we
+  -- choose to specialize them, meaning they SHOULD unify.
+  -- , -- succ undefined (should be int ty with the undefined specialized with int)
+  --   let recon = embedSpecTm (AnnExpAppF (recSpecTm (AnnExpFree "succ")) (bindSpecTm (Seq.singleton (bareQuant TyInt)) (recSpecTm (AnnExpFree "undefined"))))
+  --   in InferCase "succ undefined" (ExpApp (ExpFree "succ") (ExpFree "undefined")) (Just (recon, bareQuant TyInt))
+  -- TODO add cases for
+  -- id zero (should be int ty with id specialized with int)
+  -- id undefined (should be poly)
   ]
 
 inferWithFunDefs :: Exp -> ReuniteResult UnalignableErr AnnExpF TyF
@@ -213,7 +221,7 @@ processVerbose name expr = go where
     putStrLn "--- Expression:"
     pPrint expr
     let (pg, res) = reuniteResult funDefs expr
-    writePreGraphDot ("dot/" ++ name ++ "-initial.dot") pg
+    writePreGraphDot ("dot/output/" ++ name ++ "-initial.dot") pg
     case res of
       Left e -> do
         putStrLn "--- Failure"
@@ -227,7 +235,7 @@ processVerbose name expr = go where
         pPrint ty
         pure ty
   goVerbose bid g = do
-    writeGraphDot ("dot/" ++ name ++ "-processed.dot") g
+    writeGraphDot ("dot/output/" ++ name ++ "-processed.dot") g
     putStrLn ("--- Expr id: " ++ show bid)
     putStrLn "--- Final graph:"
     pPrint g

@@ -131,26 +131,26 @@ tupleToPair (k, v) = Pair k v
 -- | The base functor for 'SpecTm'
 data SpecTmF (h :: Type -> Type -> Type) (a :: Type) (r :: Type) =
     SpecTmEmbedF !(h a r)
-  | SpecTmSpecF !(Seq (Pair TyVar a)) !r
+  | SpecTmSpecF !(Seq a) !r
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 instance Bifunctor h => Bifunctor (SpecTmF h) where
   bimap f g = go where
     go = \case
       SpecTmEmbedF hr -> SpecTmEmbedF (bimap f g hr)
-      SpecTmSpecF ps r -> SpecTmSpecF (fmap (fmap f) ps) (g r)
+      SpecTmSpecF ps r -> SpecTmSpecF (fmap f ps) (g r)
 
 instance Bifoldable h => Bifoldable (SpecTmF h) where
   bifoldr f g = go where
     go z = \case
       SpecTmEmbedF hr -> bifoldr f g z hr
-      SpecTmSpecF ps r -> foldr f (g r z) (fmap pairVal (toList ps))
+      SpecTmSpecF ps r -> foldr f (g r z) (toList ps)
 
 instance Bitraversable h => Bitraversable (SpecTmF h) where
   bitraverse f g = go where
     go = \case
       SpecTmEmbedF hr -> fmap SpecTmEmbedF (bitraverse f g hr)
-      SpecTmSpecF ps r -> SpecTmSpecF <$> traverse (traverse f) ps <*> g r
+      SpecTmSpecF ps r -> SpecTmSpecF <$> traverse f ps <*> g r
 
 -- | A "specializing term" - contains the term constructors of 'h' but also
 -- a constructor for type specialization (binds free type vars)
@@ -193,11 +193,11 @@ recSpecTm = cata embedSpecTm
 embedSpecTm :: h a (SpecTm h a) -> SpecTm h a
 embedSpecTm = SpecTm . SpecTmEmbedF
 
-bindSpecTmF :: Seq (Pair TyVar a) -> SpecTm h a -> SpecTm h a
+bindSpecTmF :: Seq a -> SpecTm h a -> SpecTm h a
 bindSpecTmF ps x = if Seq.null ps then x else SpecTm (SpecTmSpecF ps x)
 
 -- | Binds the given ty vars, coalescing as it goes.
-bindSpecTm :: Seq (Pair TyVar a) -> SpecTm h a -> SpecTm h a
+bindSpecTm :: Seq a -> SpecTm h a -> SpecTm h a
 bindSpecTm ps s@(SpecTm x) = case x of
   SpecTmEmbedF _ -> bindSpecTmF ps s
   SpecTmSpecF ps' s' -> bindSpecTmF (ps <> ps') s'

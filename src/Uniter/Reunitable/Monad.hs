@@ -172,7 +172,7 @@ resolveTmVarRaw tmv f = do
               -- Bind metavars and apply function in the environment
               (bodyId, bodySpec) <- bindAllTyVars ps (f Nothing u)
               -- Create spec term
-              let spec = bindSpecTm ps bodySpec
+              let spec = bindSpecTm us bodySpec
               pure (bodyId, spec)
 
 resolveTmVar :: (Traversable g)

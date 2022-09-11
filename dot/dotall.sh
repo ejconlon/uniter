@@ -4,7 +4,7 @@
 
 set -eu
 
-for INPUT in dot/*.dot
+for INPUT in dot/output/*.dot
 do
   echo "Rendering graphviz ${INPUT}"
   OUTPUT=${INPUT%.dot}.png
