@@ -28,7 +28,7 @@ import Uniter (Alignable (..), GenQuant, SrcQuant, UnalignableErr (..), bareQuan
 import Uniter.Core (Index, TmVar, embedSpecTm)
 import Uniter.Render (writeGraphDot, writePreGraphDot)
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
-import Uniter.Reunitable.Driver (ReuniteSuccess (..), reuniteResult)
+import Uniter.Reunitable.Driver (ReuniteResult, ReuniteSuccess (..), reuniteResult)
 
 data Ty =
     TyInt
@@ -184,6 +184,22 @@ funDefs = Map.fromList
   , ("succ", bareQuant (TyFun TyInt TyInt))
   ]
 
+data InferCase = InferCase
+  { icName :: !String
+  , icTm :: !Exp
+  , icExpected :: !(Maybe (AnnExp (GenQuant TyF), GenQuant TyF))
+  } deriving stock (Eq, Show)
+
+inferCases :: [InferCase]
+inferCases =
+  [ InferCase "zero" (ExpFree "zero") (Just (AnnExpFree "zero", bareQuant TyInt))
+  , InferCase "succ" (ExpFree "succ") (Just (AnnExpFree "succ", bareQuant (TyFun TyInt TyInt)))
+  , InferCase "succ zero" (ExpApp (ExpFree "succ") (ExpFree "zero")) (Just (AnnExpApp (AnnExpFree "succ") (AnnExpFree "zero"), bareQuant TyInt))
+  ]
+
+inferWithFunDefs :: Exp -> ReuniteResult UnalignableErr AnnExpF TyF
+inferWithFunDefs = snd . reuniteResult funDefs
+
 -- | A complete example of how to infer the type of an expression
 -- with unification through 'Unitable' and 'Alignable'.
 processVerbose :: String -> Exp -> IO (GenQuant TyF)
@@ -192,7 +208,7 @@ processVerbose name expr = go where
     putStrLn ("*** Processing example: " ++ show name)
     putStrLn "--- Expression:"
     pPrint expr
-    let (pg, res) = reuniteResult expr
+    let (pg, res) = reuniteResult funDefs expr
     writePreGraphDot ("dot/" ++ name ++ "-initial.dot") pg
     case res of
       Left e -> do

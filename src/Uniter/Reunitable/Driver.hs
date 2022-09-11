@@ -14,10 +14,10 @@ import Control.Monad.Catch (MonadThrow (..))
 import Data.Bitraversable (Bitraversable)
 import Data.Either (fromRight)
 import Data.Functor.Foldable (Base, Recursive)
-import qualified Data.Map.Strict as Map
+import Data.Map.Strict (Map)
 import Data.Typeable (Typeable)
 import Uniter.Align (Alignable)
-import Uniter.Core (BoundTy, GenQuant, Index, Node, SpecTm, UniqueId)
+import Uniter.Core (BoundTy, GenQuant, Index, Node, SpecTm, SrcQuant, TmVar, UniqueId)
 import Uniter.Graph (ComplexResErr, Graph, resolveGenVar, resolveTm)
 import Uniter.PreGraph (PreGraph (..))
 import Uniter.Process (ProcessErr, embedReuniterM, extract, newProcessState, runProcessM)
@@ -44,22 +44,22 @@ deriving instance (Show (Node g), Show (g (BoundTy Index g)), Show (h (GenQuant 
 type ReuniteResult e h g = Either (ReuniteErr e h g) (ReuniteSuccess h g)
 
 -- | Perform unification on a term in one go. -- NOTE It may be helpful to alias this function with the types filled in.
-reuniteResult :: (Recursive t, Base t ~ f, Reunitable f h g, Alignable e g) => t -> (PreGraph g, ReuniteResult e h g)
-reuniteResult = driveReuniteResult . reuniteTerm
+reuniteResult :: (Recursive t, Base t ~ f, Reunitable f h g, Alignable e g) => Map TmVar (SrcQuant g) -> t -> (PreGraph g, ReuniteResult e h g)
+reuniteResult fm = driveReuniteResult fm . reuniteTerm
 
 quickReuniteResult ::
   (Recursive t, Base t ~ f, Reunitable f h g, Alignable e g, MonadThrow m,
-  Show e, Show (Node g), Show (g (BoundTy Index g)), Show (h UniqueId (SpecTm h UniqueId)), Typeable e, Typeable g, Typeable h) => t -> m (SpecTm h (GenQuant g), GenQuant g)
-quickReuniteResult t =
-  let r = snd (reuniteResult t)
+  Show e, Show (Node g), Show (g (BoundTy Index g)), Show (h UniqueId (SpecTm h UniqueId)), Typeable e, Typeable g, Typeable h)
+  => Map TmVar (SrcQuant g) -> t -> m (SpecTm h (GenQuant g), GenQuant g)
+quickReuniteResult fm t =
+  let r = snd (reuniteResult fm t)
   in case r of
     Left e -> throwM e
     Right (ReuniteSuccess _ tm u _) -> pure (tm, u)
 
-driveReuniteResult :: (Bitraversable h, Alignable e g) => ReuniterM g (UniqueId, SpecTm h UniqueId) -> (PreGraph g, ReuniteResult e h g)
-driveReuniteResult act =
-  let fm = Map.empty
-      uniq = toEnum 0
+driveReuniteResult :: (Bitraversable h, Alignable e g) => Map TmVar (SrcQuant g) -> ReuniterM g (UniqueId, SpecTm h UniqueId) -> (PreGraph g, ReuniteResult e h g)
+driveReuniteResult fm act =
+  let uniq = toEnum 0
       pg = fromRight (error "impossible") (fst (runReuniterM (act *> preGraph) (newReuniterEnv fm) (newReuniterState uniq)))
       (ea, _) = flip runProcessM (newProcessState uniq) $ do
         bid <- embedReuniterM fm act

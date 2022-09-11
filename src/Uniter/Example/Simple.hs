@@ -126,7 +126,7 @@ processVerbose name expr = go where
     putStrLn ("*** Processing example: " ++ show name)
     putStrLn "--- Expression:"
     pPrint expr
-    let (pg, res) = uniteResult expr
+    let (pg, res) = uniteResult mempty expr
     writePreGraphDot ("dot/" ++ name ++ "-initial.dot") pg
     case res of
       Left e -> do

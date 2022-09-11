@@ -218,10 +218,10 @@ testOmUnit = testUnit "OM unit" $ do
 testExampleSimple :: TestTree
 testExampleSimple = testUnit "simple example" $ do
   let expLinTy = Simple.TyPair Simple.TyConst Simple.TyConst
-  actualLinTy <- quickUniteResult Simple.exampleLinear
+  actualLinTy <- quickUniteResult mempty Simple.exampleLinear
   actualLinTy === expLinTy
   let expExpTy = Simple.TyPair expLinTy (Simple.TyPair expLinTy expLinTy)
-  actualExpTy <- quickUniteResult Simple.exampleExponential
+  actualExpTy <- quickUniteResult mempty Simple.exampleExponential
   actualExpTy === expExpTy
 
 testExampleComplex :: TestTree
@@ -232,7 +232,7 @@ testExampleComplex = testUnit "complex example" $ do
       x4 = Complex.AnnExpBound 0
   let expLinTm = x1
       expLinTy = Complex.TyPair Complex.TyInt Complex.TyInt
-  (actualLinTm, actualLinTy) <- quickReuniteResult Complex.exampleLinear
+  (actualLinTm, actualLinTy) <- quickReuniteResult mempty Complex.exampleLinear
   actualLinTm === recSpecTm expLinTm
   actualLinTy === recGenQuant expLinTy
 
