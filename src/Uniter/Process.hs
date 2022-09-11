@@ -137,6 +137,9 @@ alignElems da db =
   case (da, db) of
     (ElemMeta, _) -> pure db
     (_, ElemMeta) -> pure da
+    -- It is always a domain error to align skolem vars, because
+    -- they only align with themselves! The framework will not call this unless
+    -- it's aligning two distinct vars.
     (ElemSkolem tyv, _) -> throwError (ProcessErrSkolemAlign tyv db)
     (_, ElemSkolem tyv) -> throwError (ProcessErrSkolemAlign tyv da)
     (ElemNode na, ElemNode nb) -> do

@@ -14,7 +14,7 @@ import IntLike.Set (IntLikeSet)
 import qualified IntLike.Set as ILS
 import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
-import Uniter.Core (Index (..), Level (..), recSpecTm, tupleToPair)
+import Uniter.Core (Index (..), Level (..), recGenTy, recSpecTm, tupleToPair)
 import qualified Uniter.Example.Complex as Complex
 import qualified Uniter.Example.Simple as Simple
 import Uniter.OrderedMap (OrderedMap)
@@ -226,15 +226,15 @@ testExampleSimple = testUnit "simple example" $ do
 
 testExampleComplex :: TestTree
 testExampleComplex = testUnit "complex example" $ do
-  let x1 = Complex.AnnExpLet "v1" Complex.TyInt (Complex.AnnExpInt 1) x2
-      x2 = Complex.AnnExpLet "v2" (Complex.TyPair Complex.TyInt Complex.TyInt) (Complex.AnnExpTuple (Complex.AnnExpBound 0) (Complex.AnnExpBound 0)) x3
-      x3 = Complex.AnnExpLet "v3" (Complex.TyPair Complex.TyInt Complex.TyInt) (Complex.AnnExpTuple (Complex.AnnExpSecond (Complex.AnnExpBound 0)) (Complex.AnnExpFirst (Complex.AnnExpBound 0))) x4
+  let x1 = Complex.AnnExpLet "v1" (recGenTy Complex.TyInt) (Complex.AnnExpInt 1) x2
+      x2 = Complex.AnnExpLet "v2" (recGenTy (Complex.TyPair Complex.TyInt Complex.TyInt)) (Complex.AnnExpTuple (Complex.AnnExpBound 0) (Complex.AnnExpBound 0)) x3
+      x3 = Complex.AnnExpLet "v3" (recGenTy (Complex.TyPair Complex.TyInt Complex.TyInt)) (Complex.AnnExpTuple (Complex.AnnExpSecond (Complex.AnnExpBound 0)) (Complex.AnnExpFirst (Complex.AnnExpBound 0))) x4
       x4 = Complex.AnnExpBound 0
   let expLinTm = x1
       expLinTy = Complex.TyPair Complex.TyInt Complex.TyInt
   (actualLinTm, actualLinTy) <- quickReuniteResult Complex.exampleLinear
   actualLinTm === recSpecTm expLinTm
-  actualLinTy === expLinTy
+  actualLinTy === recGenTy expLinTy
 
 main :: IO ()
 main = testMain $ \_ -> testGroup "Uniter"

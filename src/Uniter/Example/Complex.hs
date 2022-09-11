@@ -172,7 +172,7 @@ exampleExponential =
 
 -- | A complete example of how to infer the type of an expression
 -- with unification through 'Unitable' and 'Alignable'.
-processVerbose :: String -> Exp -> IO Ty
+processVerbose :: String -> Exp -> IO (GenTy TyF)
 processVerbose name expr = go where
   go = do
     putStrLn ("*** Processing example: " ++ show name)

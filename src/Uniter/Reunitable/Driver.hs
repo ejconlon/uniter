@@ -13,51 +13,50 @@ import Control.Exception (Exception)
 import Control.Monad.Catch (MonadThrow (..))
 import Data.Bitraversable (Bitraversable)
 import Data.Either (fromRight)
-import Data.Functor.Foldable (Base, Corecursive, Recursive)
+import Data.Functor.Foldable (Base, Recursive)
 import qualified Data.Map.Strict as Map
 import Data.Typeable (Typeable)
 import Uniter.Align (Alignable)
-import Uniter.Core (Node, SpecTm, UniqueId)
-import Uniter.Graph (Graph, resolveTm, resolveVar)
+import Uniter.Core (GenTy, Node, SpecTm, UniqueId)
+import Uniter.Graph (Graph, ResolveErr, resolveGenVar, resolveTm)
 import Uniter.PreGraph (PreGraph (..))
 import Uniter.Process (ProcessErr, embedReuniterM, extract, newProcessState, runProcessM)
 import Uniter.Reunitable.Class (Reunitable, reuniteTerm)
 import Uniter.Reunitable.Monad (ReuniterM, newReuniterEnv, newReuniterState, preGraph, runReuniterM)
 
-data ReuniteErr e h g u =
+data ReuniteErr e h g =
     ReuniteErrProcess !(ProcessErr e g)
-  | ReuniteErrExtractTy !UniqueId !(SpecTm h UniqueId) !UniqueId !(Graph g)
+  | ReuniteErrExtractTy !UniqueId !(SpecTm h UniqueId) !ResolveErr !(Graph g)
   -- ^ (id of type, reconstructed term, id of failed extract, graph)
-  | ReuniteErrExtractTm !UniqueId !(SpecTm h UniqueId) !u !UniqueId !(Graph g)
+  | ReuniteErrExtractTm !UniqueId !(SpecTm h UniqueId) !(GenTy g) !ResolveErr !(Graph g)
   -- ^ (id of type, reconstructed term, id of failed extract, graph)
 
-deriving instance (Eq e, Eq (Node g), Eq (h UniqueId (SpecTm h UniqueId)), Eq u) => Eq (ReuniteErr e h g u)
-deriving instance (Show e, Show (Node g), Show (h UniqueId (SpecTm h UniqueId)), Show u) => Show (ReuniteErr e h g u)
+deriving instance (Eq e, Eq (Node g), Eq (g (GenTy g)), Eq (h UniqueId (SpecTm h UniqueId))) => Eq (ReuniteErr e h g)
+deriving instance (Show e, Show (Node g), Show (g (GenTy g)), Show (h UniqueId (SpecTm h UniqueId))) => Show (ReuniteErr e h g)
 
-instance (Show e, Show (Node g), Show (h UniqueId (SpecTm h UniqueId)), Show u, Typeable e, Typeable h, Typeable g, Typeable u) => Exception (ReuniteErr e h g u)
+instance (Show e, Show (Node g), Show (g (GenTy g)), Show (h UniqueId (SpecTm h UniqueId)), Typeable e, Typeable h, Typeable g) => Exception (ReuniteErr e h g)
 
-data ReuniteSuccess h g u = ReuniteSuccess !UniqueId !(SpecTm h u) !u !(Graph g)
-  deriving stock (Functor, Foldable, Traversable)
+data ReuniteSuccess h g = ReuniteSuccess !UniqueId !(SpecTm h (GenTy g)) !(GenTy g) !(Graph g)
 
-deriving instance (Eq (Node g), Eq u, Eq (h u (SpecTm h u))) => Eq (ReuniteSuccess h g u)
-deriving instance (Show (Node g), Show u, Show (h u (SpecTm h u))) => Show (ReuniteSuccess h g u)
+deriving instance (Eq (Node g), Eq (g (GenTy g)), Eq (h (GenTy g) (SpecTm h (GenTy g)))) => Eq (ReuniteSuccess h g)
+deriving instance (Show (Node g), Show (g (GenTy g)), Show (h (GenTy g) (SpecTm h (GenTy g)))) => Show (ReuniteSuccess h g)
 
-type ReuniteResult e h g u = Either (ReuniteErr e h g u) (ReuniteSuccess h g u)
+type ReuniteResult e h g = Either (ReuniteErr e h g) (ReuniteSuccess h g)
 
 -- | Perform unification on a term in one go. -- NOTE It may be helpful to alias this function with the types filled in.
-reuniteResult :: (Recursive t, Base t ~ f, Reunitable f h g, Corecursive u, Base u ~ g, Alignable e g) => t -> (PreGraph g, ReuniteResult e h g u)
+reuniteResult :: (Recursive t, Base t ~ f, Reunitable f h g, Alignable e g) => t -> (PreGraph g, ReuniteResult e h g)
 reuniteResult = driveReuniteResult . reuniteTerm
 
 quickReuniteResult ::
-  (Recursive t, Base t ~ f, Reunitable f h g, Corecursive u, Base u ~ g, Alignable e g, MonadThrow m,
-  Show e, Show (Node g), Show u, Show (h UniqueId (SpecTm h UniqueId)), Typeable e, Typeable g, Typeable h, Typeable u) => t -> m (SpecTm h u, u)
+  (Recursive t, Base t ~ f, Reunitable f h g, Alignable e g, MonadThrow m,
+  Show e, Show (Node g), Show (g (GenTy g)), Show (h UniqueId (SpecTm h UniqueId)), Typeable e, Typeable g, Typeable h) => t -> m (SpecTm h (GenTy g), GenTy g)
 quickReuniteResult t =
   let r = snd (reuniteResult t)
   in case r of
     Left e -> throwM e
     Right (ReuniteSuccess _ tm u _) -> pure (tm, u)
 
-driveReuniteResult :: (Bitraversable h, Corecursive u, Base u ~ g, Alignable e g) => ReuniterM g (UniqueId, SpecTm h UniqueId) -> (PreGraph g, ReuniteResult e h g u)
+driveReuniteResult :: (Bitraversable h, Alignable e g) => ReuniterM g (UniqueId, SpecTm h UniqueId) -> (PreGraph g, ReuniteResult e h g)
 driveReuniteResult act =
   let fm = Map.empty
       uniq = toEnum 0
@@ -69,10 +68,10 @@ driveReuniteResult act =
       res = case ea of
         Left pe -> Left (ReuniteErrProcess pe)
         Right ((bid, tm), graph) ->
-          case resolveVar bid graph of
-            Left xid -> Left (ReuniteErrExtractTy bid tm xid graph)
+          case resolveGenVar bid graph of
+            Left re -> Left (ReuniteErrExtractTy bid tm re graph)
             Right u ->
               case resolveTm tm graph of
-                Left xid -> Left (ReuniteErrExtractTm bid tm u xid graph)
+                Left re -> Left (ReuniteErrExtractTm bid tm u re graph)
                 Right tm' -> Right (ReuniteSuccess bid tm' u graph)
   in (pg, res)
