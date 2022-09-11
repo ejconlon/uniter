@@ -132,21 +132,19 @@ processVerbose name expr = go where
       Left e -> do
         putStrLn "--- Failure"
         throwM e
-      Right (UniteSuccess bid ty rs g) -> do
+      Right (UniteSuccess bid ty g) -> do
         putStrLn "--- Success"
-        goVerbose bid rs g
+        goVerbose bid g
         putStrLn "--- Final type: "
         pPrint ty
         pure ty
-  goVerbose bid rs g = do
+  goVerbose bid g = do
     writeGraphDot ("dot/" ++ name ++ "-processed.dot") g
     putStrLn ("--- Expr id: " ++ show bid)
-    putStrLn "--- Rebind map:"
-    pPrint rs
     putStrLn "--- Final graph:"
     pPrint g
 
 main :: IO ()
 main = do
-  void $ processVerbose "linear" exampleLinear
-  void $ processVerbose "exponential" exampleExponential
+  void $ processVerbose "simple-linear" exampleLinear
+  void $ processVerbose "simple-exponential" exampleExponential

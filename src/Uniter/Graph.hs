@@ -11,17 +11,19 @@ module Uniter.Graph
   , lookup
   , resolveVar
   , resolveNode
+  , resolveTm
   , weakenElem
   , weaken
   ) where
 
 import Data.Bifunctor (second)
+import Data.Bitraversable (Bitraversable (..))
 import Data.Functor.Foldable (Base, Corecursive (..))
 import IntLike.Map (IntLikeMap)
 import qualified IntLike.Map as ILM
 import Lens.Micro (Traversal')
 import Prelude hiding (lookup)
-import Uniter.Core (Node, TyVar, UniqueId (..))
+import Uniter.Core (Node, SpecTm, TyVar, UniqueId (..))
 import Uniter.PreGraph (PreElem (..), PreGraph)
 import qualified Uniter.PreGraph as UP
 
@@ -75,6 +77,10 @@ resolveVar v gr@(Graph m) =
 -- See notes on resolveVar
 resolveNode :: (Corecursive u, Base u ~ g, Traversable g) => Node g -> Graph g -> Either UniqueId u
 resolveNode n gr = fmap embed (traverse (`resolveVar` gr) n)
+
+-- See notes on resolveVar
+resolveTm :: (Bitraversable h, Corecursive u, Base u ~ g, Traversable g) => SpecTm h UniqueId -> Graph g -> Either UniqueId (SpecTm h u)
+resolveTm h gr = traverse (`resolveVar` gr) h
 
 weakenElem :: Elem g -> PreElem g
 weakenElem = \case

@@ -9,8 +9,8 @@ module Uniter.Process
   , newProcessState
   , ProcessM
   , runProcessM
-  , compact
-  , canonicalize
+  -- , compact
+  -- , canonicalize
   , extract
   , embedReuniterM
   ) where
@@ -28,6 +28,7 @@ import Data.These (These (..))
 import Data.Traversable (for)
 import Data.Typeable (Typeable)
 import IntLike.Map (IntLikeMap)
+import qualified IntLike.Map as ILM
 import Lens.Micro (lens)
 import Uniter.Align (Alignable (..))
 import Uniter.Core (Event (..), Node, Quant, TmVar, TyVar, UniqueId (..))
@@ -84,12 +85,15 @@ extractOnState :: Traversable g => ProcessState g -> ((RebindMap, Graph g), Proc
 extractOnState ps = res where
   res =
     let (m, ps'@(ProcessState _ u)) = canonicalizeOnState ps
-        g = go1 u
+        g = go1 (unUnionMap u)
     in ((m, g), ps')
-  go1 = Graph . fmap go2 . unUnionMap
-  go2 = \case
-    -- canonicalization will have eliminated all links
-    UnionEntryLink _ -> error "impossible"
+  go1 im = Graph (fmap (go2 im) im)
+  go2 im = \case
+    -- compaction will have made this a one-link jump
+    UnionEntryLink k ->
+      case ILM.lookup k im of
+        Nothing -> error ("Missing linked key: " ++ show k)
+        Just v -> go2 im v
     UnionEntryValue d -> d
 
 -- | Compact the union map - compresses all chains to directly reference roots for faster lookup
@@ -97,7 +101,7 @@ extractOnState ps = res where
 compact :: ProcessM e g RebindMap
 compact = state compactOnState
 
--- | Canonicalize the union map - compacts and eliminates nodes identical in structure.
+-- | Canonicalize the union map - compacts and rewrites nodes identical in structure.
 -- Returns a map of all rebound (non-root) ids to roots (include those removed during canonicalization).
 canonicalize :: Traversable g => ProcessM e g RebindMap
 canonicalize = state canonicalizeOnState

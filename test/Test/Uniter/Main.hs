@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Test.Uniter.Main (main) where
 
 import Data.Bifunctor (bimap, first)
@@ -12,10 +14,12 @@ import IntLike.Set (IntLikeSet)
 import qualified IntLike.Set as ILS
 import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
-import Uniter.Core (Index (..), Level (..), tupleToPair)
-import Uniter.Example.Simple (Ty (..), exampleExponential, exampleLinear)
+import Uniter.Core (Index (..), Level (..), recSpecTm, tupleToPair)
+import qualified Uniter.Example.Complex as Complex
+import qualified Uniter.Example.Simple as Simple
 import Uniter.OrderedMap (OrderedMap)
 import qualified Uniter.OrderedMap as OM
+import Uniter.Reunitable.Driver (quickReuniteResult)
 import Uniter.UnionMap (Changed (..), UnionEquiv (..), UnionMap, UnionMapAddVal (..), UnionMapLookupVal (..),
                         UnionMapMergeVal (..), UnionMapTraceRes (..), UnionMergeOne, addUnionMapM, concatUnionMergeOne,
                         emptyUnionMap, equivUnionMapM, lookupUnionMapM, mergeOneUnionMapM, sizeUnionMap, traceUnionMap,
@@ -211,18 +215,32 @@ testOmUnit = testUnit "OM unit" $ do
   let v' = OM.snocAll y (Seq.fromList (fmap tupleToPair [('b', 2), ('a', 3), ('a', 4)]))
   v' === v
 
-testExample :: TestTree
-testExample = testUnit "example" $ do
-  let expLinTy = TyPair TyConst TyConst
-  actualLinTy <- quickUniteResult exampleLinear
+testExampleSimple :: TestTree
+testExampleSimple = testUnit "simple example" $ do
+  let expLinTy = Simple.TyPair Simple.TyConst Simple.TyConst
+  actualLinTy <- quickUniteResult Simple.exampleLinear
   actualLinTy === expLinTy
-  let expExpTy = TyPair expLinTy (TyPair expLinTy expLinTy)
-  actualExpTy <- quickUniteResult exampleExponential
+  let expExpTy = Simple.TyPair expLinTy (Simple.TyPair expLinTy expLinTy)
+  actualExpTy <- quickUniteResult Simple.exampleExponential
   actualExpTy === expExpTy
+
+testExampleComplex :: TestTree
+testExampleComplex = testUnit "complex example" $ do
+  let x1 = Complex.AnnExpLet "v1" Complex.TyInt (Complex.AnnExpInt 1) x2
+      x2 = Complex.AnnExpLet "v2" (Complex.TyPair Complex.TyInt Complex.TyInt) (Complex.AnnExpTuple (Complex.AnnExpBound 1) (Complex.AnnExpBound 1)) x3
+      x3 = Complex.AnnExpLet "v3" (Complex.TyPair Complex.TyInt Complex.TyInt) (Complex.AnnExpTuple (Complex.AnnExpSecond (Complex.AnnExpBound 1)) (Complex.AnnExpFirst (Complex.AnnExpBound 1))) x4
+      x4 = Complex.AnnExpBound 0
+  let expLinTm = x1
+      expLinTy = Complex.TyPair Complex.TyInt Complex.TyInt
+  (actualLinTm, actualLinTy) <- quickReuniteResult Complex.exampleLinear
+  -- TODO FIX BOUND VARIABLES!
+  -- actualLinTm === recSpecTm expLinTm
+  actualLinTy === expLinTy
 
 main :: IO ()
 main = testMain $ \_ -> testGroup "Uniter"
   [ testUmUnit
   , testOmUnit
-  , testExample
+  , testExampleSimple
+  , testExampleComplex
   ]

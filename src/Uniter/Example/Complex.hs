@@ -1,20 +1,35 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Uniter.Example.Complex
-  ( main
+  ( Ty (..)
+  , TyF (..)
+  , Exp (..)
+  , ExpF (..)
+  , AnnExp (..)
+  , AnnExpF (..)
+  , exampleLinear
+  , exampleExponential
+  , processVerbose
+  , main
   ) where
 
-import Control.Monad ((>=>))
+import Control.Monad (void, (>=>))
+import Control.Monad.Catch (MonadThrow (..))
 import Data.Bifunctor.TH (deriveBifoldable, deriveBifunctor, deriveBitraversable)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.These (These (..))
+import Text.Pretty.Simple (pPrint)
 import Uniter (Alignable (..), UnalignableErr (..))
 import Uniter.Core (GenTy, Index, TmVar, embedSpecTm)
+import Uniter.Render (writeGraphDot, writePreGraphDot)
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
+import Uniter.Reunitable.Driver (ReuniteSuccess (..), reuniteResult)
 
 data Ty =
     TyInt
   | TyFun Ty Ty
+  | TyPair Ty Ty
   deriving stock (Eq, Ord, Show)
 
 makeBaseFunctor ''Ty
@@ -28,6 +43,9 @@ data Exp =
   | ExpInt !Int
   | ExpAdd Exp Exp
   | ExpIfZero Exp Exp Exp
+  | ExpTuple Exp Exp
+  | ExpFirst Exp
+  | ExpSecond Exp
   | ExpApp Exp Exp
   | ExpAbs !TmVar !(Maybe (GenTy TyF)) !Exp
   | ExpLet !TmVar !(Maybe (GenTy TyF)) !Exp !Exp
@@ -45,6 +63,9 @@ data AnnExp ty =
   | AnnExpInt !Int
   | AnnExpAdd (AnnExp ty) (AnnExp ty)
   | AnnExpIfZero (AnnExp ty) (AnnExp ty) (AnnExp ty)
+  | AnnExpTuple (AnnExp ty) (AnnExp ty)
+  | AnnExpFirst (AnnExp ty)
+  | AnnExpSecond (AnnExp ty)
   | AnnExpApp (AnnExp ty) (AnnExp ty)
   | AnnExpAbs !TmVar !ty (AnnExp ty)
   | AnnExpLet !TmVar !ty (AnnExp ty) (AnnExp ty)
@@ -65,6 +86,7 @@ instance Alignable UnalignableErr TyF where
     case (x, y) of
       (TyIntF, TyIntF) -> Right TyIntF
       (TyFunF xa xb, TyFunF ya yb) -> Right (TyFunF (These xa ya) (These xb yb))
+      (TyPairF xa xb, TyPairF ya yb) -> Right (TyPairF (These xa ya) (These xb yb))
       _ -> Left UnalignableErr
 
 instance Reunitable ExpF AnnExpF TyF where
@@ -89,6 +111,25 @@ instance Reunitable ExpF AnnExpF TyF where
       _ <- reuniterConstrainEq y j
       _ <- reuniterConstrainEq y k
       pure (y, embedSpecTm (AnnExpIfZeroF si sj sk))
+    ExpTupleF mi mj -> do
+      (i, si) <- mi
+      (j, sj) <- mj
+      z <- reuniterAddBaseTy (TyPairF i j)
+      pure (z, embedSpecTm (AnnExpTupleF si sj))
+    ExpFirstF mi -> do
+      (i, si) <- mi
+      v <- reuniterFreshVar
+      w <- reuniterFreshVar
+      y <- reuniterAddBaseTy (TyPairF v w)
+      _ <- reuniterConstrainEq i y
+      pure (v, embedSpecTm (AnnExpFirstF si))
+    ExpSecondF mi -> do
+      (i, si) <- mi
+      v <- reuniterFreshVar
+      w <- reuniterFreshVar
+      y <- reuniterAddBaseTy (TyPairF v w)
+      _ <- reuniterConstrainEq i y
+      pure (w, embedSpecTm (AnnExpSecondF si))
     ExpFreeF n ->
       let onFree = embedSpecTm (AnnExpFreeF n)
           onBound = embedSpecTm . AnnExpBoundF
@@ -110,5 +151,55 @@ instance Reunitable ExpF AnnExpF TyF where
       (y, sy) <- reuniterBindTmVar n i' mj
       pure (y, embedSpecTm (AnnExpLetF n i' si sy))
 
+-- | A small example of type (C, C)
+exampleLinear :: Exp
+exampleLinear =
+  let x1 = ExpLet "v1" Nothing (ExpInt 1) x2
+      x2 = ExpLet "v2" Nothing (ExpTuple (ExpFree "v1") (ExpFree "v1")) x3
+      x3 = ExpLet "v3" Nothing (ExpTuple (ExpSecond (ExpFree "v2")) (ExpFirst (ExpFree "v2"))) x4
+      x4 = ExpFree "v3"
+  in x1
+
+-- | An example that can easily grow larger: ((C, C), ((C, C), (C, C)))
+exampleExponential :: Exp
+exampleExponential =
+  let x1 = ExpLet "v1" Nothing (ExpInt 1) x2
+      x2 = ExpLet "v2" Nothing (ExpTuple (ExpFree "v1") (ExpFree "v1")) x3
+      x3 = ExpLet "v3" Nothing (ExpTuple (ExpFirst (ExpFree "v2")) (ExpFree "v2")) x4
+      x4 = ExpLet "v4" Nothing (ExpTuple (ExpSecond (ExpFree "v3")) (ExpTuple (ExpFree "v2") (ExpFree "v2"))) x5
+      x5 = ExpFree "v4"
+  in x1
+
+-- | A complete example of how to infer the type of an expression
+-- with unification through 'Unitable' and 'Alignable'.
+processVerbose :: String -> Exp -> IO Ty
+processVerbose name expr = go where
+  go = do
+    putStrLn ("*** Processing example: " ++ show name)
+    putStrLn "--- Expression:"
+    pPrint expr
+    let (pg, res) = reuniteResult expr
+    writePreGraphDot ("dot/" ++ name ++ "-initial.dot") pg
+    case res of
+      Left e -> do
+        putStrLn "--- Failure"
+        throwM e
+      Right (ReuniteSuccess bid tm ty g) -> do
+        putStrLn "--- Success"
+        goVerbose bid g
+        putStrLn "--- Final tm:"
+        pPrint tm
+        putStrLn "--- Final type: "
+        pPrint ty
+        pure ty
+  goVerbose bid g = do
+    writeGraphDot ("dot/" ++ name ++ "-processed.dot") g
+    putStrLn ("--- Expr id: " ++ show bid)
+    putStrLn "--- Final graph:"
+    pPrint g
+
 main :: IO ()
-main = pure ()
+main = do
+  void $ processVerbose "complex-linear" exampleLinear
+  void $ processVerbose "complex-exponential" exampleExponential
+

@@ -237,6 +237,8 @@ equivUnionMapLM l = mayStateLens l equivUnionMap
 equivUnionMapM :: (Coercible k Int, MonadState (UnionMap k v) m) => m (UnionEquiv k)
 equivUnionMapM = equivUnionMapLM id
 
+-- | Compresses all paths so there is never more than one jump to the root of each class
+-- Retains all keys in the map but returns a mapping of non-root -> root keys
 compactUnionMap :: Coercible k Int => UnionMap k v -> (IntLikeMap k k, UnionMap k v)
 compactUnionMap u = foldl' go (ILM.empty, u) (toListUnionMap u) where
   go mw@(m, w) (k, ue) =
@@ -256,13 +258,15 @@ compactUnionMapLM l = stateLens l compactUnionMap
 compactUnionMapM :: (Coercible k Int, MonadState (UnionMap k v) m) => m (IntLikeMap k k)
 compactUnionMapM = compactUnionMapLM id
 
+-- | Compacts and rewrites all values with canonical keys.
+-- Retains all keys in the map and again returns a mapping of non-root -> root keys.
 canonicalizeUnionMap :: (Coercible k Int) => Traversal' v k -> UnionMap k v -> (IntLikeMap k k, UnionMap k v)
 canonicalizeUnionMap t u = res where
-  res = let (m, w) = compactUnionMap u in (m, UnionMap (ILM.fromList (toListUnionMap w >>= go m)))
-  go m (k, ue) =
+  res = let (m, UnionMap w) = compactUnionMap u in (m, UnionMap (fmap (go m) w))
+  go m ue =
     case ue of
-      UnionEntryLink _ -> []
-      UnionEntryValue fk -> [(k, UnionEntryValue (over t (\j -> ILM.findWithDefault j j m) fk))]
+      UnionEntryLink _ -> ue
+      UnionEntryValue fk -> UnionEntryValue (over t (\j -> ILM.findWithDefault j j m) fk)
 
 canonicalizeUnionMapLM :: (Coercible k Int, MonadState s m) => UnionMapLens s k v -> Traversal' v k -> m (IntLikeMap k k)
 canonicalizeUnionMapLM l t = stateLens l (canonicalizeUnionMap t)

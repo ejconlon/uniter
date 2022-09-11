@@ -15,10 +15,12 @@ module Uniter.Core
   , tupleToPair
   , SpecTm (..)
   , SpecTmF (..)
+  , recSpecTm
   , embedSpecTm
   , bindSpecTm
   , GenTy (..)
   , GenTyF (..)
+  , recGenTy
   , embedGenTy
   , varGenTy
   , closedGenTy
@@ -59,21 +61,25 @@ deriving instance Ord (Node g) => Ord (Event g)
 deriving instance Show (Node g) => Show (Event g)
 
 -- | DeBruijn index
+-- Num instance is for literal conversion
 newtype Index = Index { unIndex :: Int }
   deriving stock (Show)
-  deriving newtype (Eq, Enum, Ord)
+  deriving newtype (Eq, Enum, Ord, Num)
 
 -- | DeBruijn level
+-- Num instance is for literal conversion
 newtype Level = Level { unLevel :: Int }
   deriving stock (Show)
-  deriving newtype (Eq, Enum, Ord)
+  deriving newtype (Eq, Enum, Ord, Num)
 
 -- | A type variable (or binder)
+-- IsString instance is for literal conversion
 newtype TyVar = TyVar { unTyVar :: Text }
   deriving stock (Show)
   deriving newtype (Eq, Ord, IsString)
 
 -- | A term variable (or binder)
+-- IsString instance is for literal conversion
 newtype TmVar = TmVar { unTmVar :: Text }
   deriving stock (Show)
   deriving newtype (Eq, Ord, IsString)
@@ -168,6 +174,10 @@ instance Functor (h a) => Recursive (SpecTm h a) where
 instance Functor (h a) => Corecursive (SpecTm h a) where
   embed = SpecTm
 
+-- | Recursively embeds a term with no specialization.
+recSpecTm :: (Recursive v, Base v ~ h a) => v -> SpecTm h a
+recSpecTm = cata embedSpecTm
+
 -- | Embeds a meaningful constructor into the specialized term representation.
 embedSpecTm :: h a (SpecTm h a) -> SpecTm h a
 embedSpecTm = SpecTm . SpecTmEmbedF
@@ -193,6 +203,9 @@ newtype GenTy (g :: Type -> Type) = GenTy { unGenTy :: GenTyF g (GenTy g) }
 deriving stock instance Eq (g (GenTy g)) => (Eq (GenTy g))
 deriving stock instance Ord (g (GenTy g)) => (Ord (GenTy g))
 deriving stock instance Show (g (GenTy g)) => (Show (GenTy g))
+
+recGenTy :: (Recursive u, Base u ~ g) => u -> GenTy g
+recGenTy = cata embedGenTy
 
 embedGenTy :: g (GenTy g) -> GenTy g
 embedGenTy = GenTy . GenTyEmbedF
