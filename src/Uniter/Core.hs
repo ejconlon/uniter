@@ -58,7 +58,7 @@ type Node g = g UniqueId
 data Event g =
     EventAddNode !(Node g) !UniqueId
   | EventConstrainEq !UniqueId !UniqueId !UniqueId
-  | EventNewMetaVar !UniqueId
+  | EventNewMetaVar !(Maybe TyVar) !UniqueId
   | EventNewSkolemVar !TyVar !UniqueId
 
 deriving instance Eq (Node g) => Eq (Event g)

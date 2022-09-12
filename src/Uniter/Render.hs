@@ -27,14 +27,14 @@ reprUniqueId = show . unUniqueId
 reprElem :: (Show (g Int), Functor g) => Elem g -> String
 reprElem = \case
   ElemNode n -> unwords ["Node", show (fmap unUniqueId n)]
-  ElemMeta -> "Meta"
+  ElemMeta mtyv -> maybe "Meta" (\(TyVar n) -> "Meta " ++ T.unpack n) mtyv
   ElemSkolem (TyVar n) -> "Skolem " ++ T.unpack n
 
 reprPreElem :: (Show (g Int), Functor g) => PreElem g -> String
 reprPreElem = \case
   PreElemNode n -> unwords ["Node", show (fmap unUniqueId n)]
   PreElemEq i j -> unwords ["Eq", reprUniqueId i, reprUniqueId j]
-  PreElemMeta -> "Meta"
+  PreElemMeta mtyv -> maybe "Meta" (\(TyVar n) -> "Meta " ++ T.unpack n) mtyv
   PreElemSkolem (TyVar n) -> "Skolem " ++ T.unpack n
 
 elemChildren :: Foldable g => Elem g -> [UniqueId]

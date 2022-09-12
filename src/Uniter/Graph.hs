@@ -45,7 +45,7 @@ import qualified Uniter.PreGraph as UP
 
 data Elem g =
     ElemNode !(Node g)
-  | ElemMeta
+  | ElemMeta !(Maybe TyVar)
   | ElemSkolem !TyVar
 
 deriving stock instance Eq (Node g) => Eq (Elem g)
@@ -56,8 +56,7 @@ deriving stock instance Show (Node g) => Show (Elem g)
 elemTraversal :: Traversable g => Traversal' (Elem g) UniqueId
 elemTraversal f = \case
   ElemNode fb -> fmap ElemNode (traverse f fb)
-  ElemMeta -> pure ElemMeta
-  ElemSkolem tyv -> pure (ElemSkolem tyv)
+  e -> pure e
 
 newtype Graph g = Graph { unGraph :: IntLikeMap UniqueId (Elem g) }
 
@@ -87,7 +86,7 @@ data ResEnv g = ResEnv
 data SimpleResErr =
     SimpleResErrLoop !UniqueId
   | SimpleResErrNotFound !UniqueId
-  | SimpleResErrUnsolvedMeta !UniqueId
+  | SimpleResErrUnsolvedMeta !UniqueId !(Maybe TyVar)
   | SimpleResErrUnsupportedSkolem !UniqueId !TyVar
   deriving stock (Eq, Show)
 
@@ -113,7 +112,7 @@ resolveVarM v = do
           Just j -> do
             w <- case j of
               ElemNode x -> local (\re -> re { rePath = ILS.insert v (rePath re) }) (resolveNodeM x)
-              ElemMeta -> throwError (SimpleResErrUnsolvedMeta v)
+              ElemMeta mtyv -> throwError (SimpleResErrUnsolvedMeta v mtyv)
               ElemSkolem tyv -> throwError (SimpleResErrUnsupportedSkolem v tyv)
             modify' (ILM.insert v w)
             pure w
@@ -168,7 +167,7 @@ resolveGenVarM v = do
           Just j -> do
             p <- case j of
               ElemNode x -> local (\re -> re { rePath = ILS.insert v (rePath re) }) (resolveGenNodeM x)
-              ElemMeta -> newVarM v Nothing
+              ElemMeta mtyv -> newVarM v mtyv
               ElemSkolem tyv -> newVarM v (Just tyv)
             modify' (\st -> st { crsCache = ILM.insert v p (crsCache st) })
             pure p
@@ -206,7 +205,7 @@ resolveTm h gr = traverse (`resolveGenVar` gr) h
 weakenElem :: Elem g -> PreElem g
 weakenElem = \case
   ElemNode g -> PreElemNode g
-  ElemMeta -> PreElemMeta
+  ElemMeta mtyv -> PreElemMeta mtyv
   ElemSkolem tyv -> PreElemSkolem tyv
 
 weaken :: Graph g -> PreGraph g

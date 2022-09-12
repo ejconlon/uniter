@@ -15,6 +15,7 @@ module Uniter.Process
   , embedReuniterM
   ) where
 
+import Control.Applicative ((<|>))
 import Control.Exception (Exception)
 import Control.Monad.Except (Except, ExceptT, MonadError (..), runExcept, runExceptT)
 import Control.Monad.State.Strict (MonadState (..), State, StateT, gets, modify', runState, runStateT, state)
@@ -135,8 +136,9 @@ runAlignM al b = fmap (\((a, w), s) -> (a, s, w)) (runExcept (runStateT (runWrit
 alignElems :: Alignable e g => Elem g -> Elem g -> AlignM e g (Elem g)
 alignElems da db =
   case (da, db) of
-    (ElemMeta, _) -> pure db
-    (_, ElemMeta) -> pure da
+    (ElemMeta mtya, ElemMeta mtyb) -> pure (ElemMeta (mtya <|> mtyb))
+    (ElemMeta _, _) -> pure db
+    (_, ElemMeta _) -> pure da
     -- It is always a domain error to align skolem vars, because
     -- they only align with themselves! The framework will not call this unless
     -- it's aligning two distinct vars.
@@ -185,7 +187,7 @@ constrainP :: Alignable e g => Item -> ProcessM e g ()
 constrainP it = do
   -- NOTE contract is that the root will not have been referenced before,
   -- so we have to add it to the graph when we see it
-  defineP ElemMeta (itemRoot it)
+  defineP (ElemMeta Nothing) (itemRoot it)
   constrainRecP (Seq.singleton it)
 
 constrainRecP :: Alignable e g => Seq Item -> ProcessM e g ()
@@ -194,7 +196,7 @@ constrainRecP = \case
     it :<| rest -> do
       newIts <- mergeP it
       -- see note in emitP
-      for_ newIts $ \newIt -> defineP ElemMeta (itemRoot newIt)
+      for_ newIts $ \newIt -> defineP (ElemMeta Nothing) (itemRoot newIt)
       constrainRecP (newIts <> rest)
 
 defineP :: Elem g -> UniqueId -> ProcessM e g ()
@@ -208,7 +210,7 @@ handleEvent :: Alignable e g => Event g -> ProcessM e g ()
 handleEvent = \case
   EventAddNode n k -> defineP (ElemNode n) k
   EventConstrainEq i j k -> constrainP (Item (Duo i j) k)
-  EventNewMetaVar k -> defineP ElemMeta k
+  EventNewMetaVar mtyv k -> defineP (ElemMeta mtyv) k
   EventNewSkolemVar tyv k -> defineP (ElemSkolem tyv) k
 
 embedReuniterM :: Alignable e g => Map TmVar (SrcQuant g) -> ReuniterM g a -> ProcessM e g a

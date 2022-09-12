@@ -81,8 +81,8 @@ instance Unitable ExpF TyF where
       -- find the type of the argument
       x <- mx
       -- and ensure it unifies with a tuple type
-      v <- uniterFreshVar
-      w <- uniterFreshVar
+      v <- uniterFreshVar Nothing
+      w <- uniterFreshVar Nothing
       y <- uniterAddBaseTy (TyPairF v w)
       _ <- uniterConstrainEq x y
       -- fst returns the type of the first element of the pair
@@ -91,8 +91,8 @@ instance Unitable ExpF TyF where
       -- just like first, find the type of the argument
       x <- mx
       -- and again ensure it unifies with a tuple type
-      v <- uniterFreshVar
-      w <- uniterFreshVar
+      v <- uniterFreshVar Nothing
+      w <- uniterFreshVar Nothing
       y <- uniterAddBaseTy (TyPairF v w)
       _ <- uniterConstrainEq x y
       -- BUT return something different here:

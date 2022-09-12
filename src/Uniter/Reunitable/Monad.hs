@@ -109,8 +109,8 @@ addBoundTy tyVars = go where
         Just u -> pure u
     BoundTyEmbedF g -> traverse go g >>= addBaseTy
 
-freshMetaVar :: ReuniterM g UniqueId
-freshMetaVar = withEvent EventNewMetaVar
+freshMetaVar :: Maybe TyVar -> ReuniterM g UniqueId
+freshMetaVar = withEvent . EventNewMetaVar
 
 freshSkolemVar :: TyVar -> ReuniterM g UniqueId
 freshSkolemVar = withEvent . EventNewSkolemVar
@@ -166,7 +166,7 @@ resolveTmVarRaw tmv f = do
             -- New type binders
             QuantForAll (ForAll tyvs body) -> do
               -- Allocate skolem vars for the instantiations of all type variables
-              ps <- traverse (\tyv -> fmap (Pair tyv) (freshSkolemVar tyv)) tyvs
+              ps <- traverse (\tyv -> fmap (Pair tyv) (freshMetaVar (Just tyv))) tyvs
               let us = fmap pairVal ps
               u <- addBoundTy us body
               -- Bind metavars and apply function in the environment
@@ -185,7 +185,7 @@ recordEvent :: Event g -> PreGraph g -> PreGraph g
 recordEvent = \case
   EventAddNode n k -> UP.insert k (PreElemNode n)
   EventConstrainEq i j k -> UP.insert k (PreElemEq i j)
-  EventNewMetaVar k -> UP.insert k PreElemMeta
+  EventNewMetaVar mtyv k -> UP.insert k (PreElemMeta mtyv)
   EventNewSkolemVar tyv k -> UP.insert k (PreElemSkolem tyv)
 
 -- | Generate a 'PreGraph' (a 'Graph' with equality nodes) from the current set of events.

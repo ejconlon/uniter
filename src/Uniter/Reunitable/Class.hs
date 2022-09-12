@@ -8,7 +8,7 @@ import Data.Bitraversable (Bitraversable)
 import Data.Foldable (toList)
 import Data.Functor.Foldable (Base, Recursive (..))
 import Data.Kind (Type)
-import Uniter.Core (Index, Node, SpecTm, SrcQuant, TmVar, UniqueId)
+import Uniter.Core (Index, Node, SpecTm, SrcQuant, TmVar, TyVar, UniqueId)
 import Uniter.Reunitable.Monad (ReuniterM, addBaseTy, addSrcQuant, bindTmVar, constrainEq, freshMetaVar, resolveTmVar)
 
 -- | (There's really only one instance of this but we need to encapsulate the monad.)
@@ -20,7 +20,7 @@ class (Traversable g, Monad m) => MonadReuniter (g :: Type -> Type) (m :: Type -
   reuniterAddSrcQuant :: SrcQuant g -> m UniqueId
 
   -- | Allocate a fresh ID.
-  reuniterFreshVar :: m UniqueId
+  reuniterFreshVar :: Maybe TyVar -> m UniqueId
 
   -- | Emit equality constraints on two IDs.
   reuniterConstrainEq :: UniqueId -> UniqueId -> m UniqueId
@@ -42,7 +42,7 @@ class (Traversable g, Monad m) => MonadReuniter (g :: Type -> Type) (m :: Type -
 
   -- | Bind the type of the given term variable to a fresh metavar in the given scope.
   reuniterBindFreshTmVar :: TmVar -> m a -> m a
-  reuniterBindFreshTmVar tmv m = reuniterFreshVar >>= \b -> reuniterBindTmVar tmv b m
+  reuniterBindFreshTmVar tmv m = reuniterFreshVar Nothing >>= \b -> reuniterBindTmVar tmv b m
 
 instance Traversable g => MonadReuniter g (ReuniterM g) where
   reuniterAddBaseTy = addBaseTy

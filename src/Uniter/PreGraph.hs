@@ -18,7 +18,7 @@ import Uniter.Core (Node, TyVar, UniqueId (..))
 data PreElem g =
     PreElemNode !(Node g)
   | PreElemEq !UniqueId !UniqueId
-  | PreElemMeta
+  | PreElemMeta !(Maybe TyVar)
   | PreElemSkolem !TyVar
 
 deriving stock instance Eq (Node g) => Eq (PreElem g)

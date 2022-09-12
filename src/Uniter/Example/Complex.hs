@@ -21,6 +21,7 @@ module Uniter.Example.Complex
 import Control.Monad (void, (>=>))
 import Control.Monad.Catch (MonadThrow (..))
 import Data.Bifunctor.TH (deriveBifoldable, deriveBifunctor, deriveBitraversable)
+import Data.Foldable (for_)
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -114,7 +115,7 @@ instance Reunitable ExpF AnnExpF TyF where
       (j, sj) <- mj
       (k, sk) <- mk
       x <- reuniterAddBaseTy TyIntF
-      y <- reuniterFreshVar
+      y <- reuniterFreshVar Nothing
       _ <- reuniterConstrainEq x i
       _ <- reuniterConstrainEq y j
       _ <- reuniterConstrainEq y k
@@ -126,15 +127,15 @@ instance Reunitable ExpF AnnExpF TyF where
       pure (z, embedSpecTm (AnnExpTupleF si sj))
     ExpFirstF mi -> do
       (i, si) <- mi
-      v <- reuniterFreshVar
-      w <- reuniterFreshVar
+      v <- reuniterFreshVar Nothing
+      w <- reuniterFreshVar Nothing
       y <- reuniterAddBaseTy (TyPairF v w)
       _ <- reuniterConstrainEq i y
       pure (v, embedSpecTm (AnnExpFirstF si))
     ExpSecondF mi -> do
       (i, si) <- mi
-      v <- reuniterFreshVar
-      w <- reuniterFreshVar
+      v <- reuniterFreshVar Nothing
+      w <- reuniterFreshVar Nothing
       y <- reuniterAddBaseTy (TyPairF v w)
       _ <- reuniterConstrainEq i y
       pure (w, embedSpecTm (AnnExpSecondF si))
@@ -145,12 +146,12 @@ instance Reunitable ExpF AnnExpF TyF where
     ExpAppF mi mj -> do
       (i, si) <- mi
       (j, sj) <- mj
-      x <- reuniterFreshVar
+      x <- reuniterFreshVar Nothing
       y <- reuniterAddBaseTy (TyFunF j x)
       _ <- reuniterConstrainEq y i
       pure (x, embedSpecTm (AnnExpAppF si sj))
     ExpAbsF n mt mi -> do
-      x <- maybe reuniterFreshVar reuniterAddSrcQuant mt
+      x <- maybe (reuniterFreshVar Nothing) reuniterAddSrcQuant mt
       (y, sy) <- reuniterBindTmVar n x mi
       pure (y, embedSpecTm (AnnExpAbsF n y sy))
     ExpLetF n mt mi mj -> do
@@ -198,12 +199,10 @@ inferCases :: [InferCase]
 inferCases =
   [ InferCase "zero" (ExpFree "zero") (Just (recSpecTm (AnnExpFree "zero"), bareQuant TyInt))
   , InferCase "succ" (ExpFree "succ") (Just (recSpecTm (AnnExpFree "succ"), bareQuant (TyFun TyInt TyInt)))
-  , InferCase "succ zero" (ExpApp (ExpFree "succ") (ExpFree "zero")) (Just (recSpecTm (AnnExpApp (AnnExpFree "succ") (AnnExpFree "zero")), bareQuant TyInt))
-  -- TODO fix this case: free vars should have their tyvars inserted as (named) metavars, not skolem vars, because we
-  -- choose to specialize them, meaning they SHOULD unify.
-  -- , -- succ undefined (should be int ty with the undefined specialized with int)
-  --   let recon = embedSpecTm (AnnExpAppF (recSpecTm (AnnExpFree "succ")) (bindSpecTm (Seq.singleton (bareQuant TyInt)) (recSpecTm (AnnExpFree "undefined"))))
-  --   in InferCase "succ undefined" (ExpApp (ExpFree "succ") (ExpFree "undefined")) (Just (recon, bareQuant TyInt))
+  , InferCase "succ-zero" (ExpApp (ExpFree "succ") (ExpFree "zero")) (Just (recSpecTm (AnnExpApp (AnnExpFree "succ") (AnnExpFree "zero")), bareQuant TyInt))
+  , -- succ undefined (should be int ty with the undefined specialized with int)
+    let recon = embedSpecTm (AnnExpAppF (recSpecTm (AnnExpFree "succ")) (bindSpecTm (Seq.singleton (bareQuant TyInt)) (recSpecTm (AnnExpFree "undefined"))))
+    in InferCase "succ-undefined" (ExpApp (ExpFree "succ") (ExpFree "undefined")) (Just (recon, bareQuant TyInt))
   -- TODO add cases for
   -- id zero (should be int ty with id specialized with int)
   -- id undefined (should be poly)
@@ -244,4 +243,4 @@ main :: IO ()
 main = do
   void $ processVerbose "complex-linear" exampleLinear
   void $ processVerbose "complex-exponential" exampleExponential
-
+  for_ inferCases (\(InferCase name tm _) -> processVerbose ("complex-" ++ name) tm)

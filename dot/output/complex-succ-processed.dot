@@ -1,0 +1,8 @@
+digraph 
+{
+  "0" [label="0: Node TyIntF"]
+  "1" [label="1: Node TyIntF"]
+  "2" [label="2: Node TyFunF 0 1"]
+  "2" -> "0"
+  "2" -> "1"
+}
