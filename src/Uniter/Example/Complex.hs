@@ -203,8 +203,10 @@ inferCases =
   , -- succ undefined (should be int ty with the undefined specialized with int)
     let recon = embedSpecTm (AnnExpAppF (recSpecTm (AnnExpFree "succ")) (bindSpecTm (Seq.singleton (bareQuant TyInt)) (recSpecTm (AnnExpFree "undefined"))))
     in InferCase "succ-undefined" (ExpApp (ExpFree "succ") (ExpFree "undefined")) (Just (recon, bareQuant TyInt))
+  , -- id zero (should be int ty with id specialized with int)
+    let recon = embedSpecTm (AnnExpAppF (bindSpecTm (Seq.singleton (bareQuant TyInt)) (recSpecTm (AnnExpFree "id"))) (recSpecTm (AnnExpFree "zero")))
+    in InferCase "id-zero" (ExpApp (ExpFree "id") (ExpFree "zero")) (Just (recon, bareQuant TyInt))
   -- TODO add cases for
-  -- id zero (should be int ty with id specialized with int)
   -- id undefined (should be poly)
   ]
 
