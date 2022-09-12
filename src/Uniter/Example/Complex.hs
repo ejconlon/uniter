@@ -30,7 +30,7 @@ import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
 import Uniter (Alignable (..), GenQuant, SpecTm, SrcQuant, UnalignableErr (..), bareQuant, bindSpecTm, embedBoundTy,
                forAllQuant, recSpecTm, varBoundTy)
-import Uniter.Core (Index, TmVar, embedSpecTm)
+import Uniter.Core (GenBinder (..), Index, TmVar, embedSpecTm)
 import Uniter.Render (writeGraphDot, writePreGraphDot)
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
 import Uniter.Reunitable.Driver (ReuniteResult, ReuniteSuccess (..), reuniteResult)
@@ -206,8 +206,13 @@ inferCases =
   , -- id zero (should be int ty with id specialized with int)
     let recon = embedSpecTm (AnnExpAppF (bindSpecTm (Seq.singleton (bareQuant TyInt)) (recSpecTm (AnnExpFree "id"))) (recSpecTm (AnnExpFree "zero")))
     in InferCase "id-zero" (ExpApp (ExpFree "id") (ExpFree "zero")) (Just (recon, bareQuant TyInt))
-  -- TODO add cases for
-  -- id undefined (should be poly)
+  -- , -- id undefined (should be poly)
+  --   -- TODO this is nonsense...
+  --   let recon = embedSpecTm $ AnnExpAppF
+  --         (bindSpecTm (Seq.singleton (forAllQuant (Seq.singleton (GenBinder 0 (Just "a"))) (varBoundTy 0))) (recSpecTm (AnnExpFree "id")))
+  --         (bindSpecTm (Seq.singleton (forAllQuant (Seq.singleton (GenBinder 2 (Just "a"))) (varBoundTy 0))) (recSpecTm (AnnExpFree "undefined")))
+  --       ty = forAllQuant (Seq.singleton (GenBinder 3 (Just "a"))) (varBoundTy 0)
+  --   in InferCase "id-undefined" (ExpApp (ExpFree "id") (ExpFree "undefined")) (Just (recon, ty))
   ]
 
 inferWithFunDefs :: Exp -> ReuniteResult UnalignableErr AnnExpF TyF

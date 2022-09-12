@@ -47,9 +47,10 @@ import Data.String (IsString)
 import Data.Text (Text)
 
 -- | A unique ID for generating distinct synthetic vars
+-- Num instance is for literal parsing.
 newtype UniqueId = UniqueId { unUniqueId :: Int }
   deriving stock (Show)
-  deriving newtype (Eq, Ord, Enum)
+  deriving newtype (Eq, Ord, Enum, Num)
 
 -- | A 'Node' is a structure with all the holes filled with 'UniqueId's.
 type Node g = g UniqueId
