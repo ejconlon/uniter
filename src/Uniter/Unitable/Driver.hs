@@ -14,7 +14,7 @@ import Data.Functor.Foldable (Base, Corecursive, Recursive)
 import Data.Map.Strict (Map)
 import Data.Typeable (Typeable)
 import Uniter.Align (Alignable)
-import Uniter.Core (Node, TmVar, UniqueId, bareQuant)
+import Uniter.Core (Node, TmVar, UniqueId, bareQuantTy)
 import Uniter.Graph (Graph, SimpleResErr, resolveVar)
 import Uniter.PreGraph (PreGraph (..))
 import Uniter.Process (ProcessErr, embedReuniterM, extract, newProcessState, runProcessM)
@@ -54,7 +54,7 @@ quickUniteResult fm t =
 
 driveUniteResult :: (Recursive u, Corecursive u, Base u ~ g, Alignable e g) => Map TmVar u -> ReuniterM g UniqueId -> (PreGraph g, UniteResult e g u)
 driveUniteResult fm act =
-  let fm' = fmap bareQuant fm
+  let fm' = fmap bareQuantTy fm
       uniq = toEnum 0
       pg = fromRight (error "impossible") (fst (runReuniterM (act *> preGraph) (newReuniterEnv fm') (newReuniterState uniq)))
       (ea, _) = flip runProcessM (newProcessState uniq) $ do

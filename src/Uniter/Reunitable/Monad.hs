@@ -28,7 +28,7 @@ import qualified Data.Map.Strict as Map
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
 import Uniter.Core (BoundTy (..), BoundTyF (..), Event (..), ForAll (..), Index (..), Node, Pair (..), Quant (..),
-                    SpecTm, SrcQuant, TmVar, TyVar, UniqueId (..), Var (..), bindSpecTm)
+                    SpecTm, SrcQuant, TmVar, TyVar, UniqueId (..), Var (..), bindSpecTm, demoteQuant)
 import Uniter.OrderedMap (OrderedMap)
 import qualified Uniter.OrderedMap as OM
 import Uniter.PreGraph (PreElem (..), PreGraph (..))
@@ -41,8 +41,8 @@ data ReuniterEnv g = ReuniterEnv
   -- ^ Map of var to type metavars (scoped)
   }
 
-deriving instance Eq (g (BoundTy Index g)) => Eq (ReuniterEnv g)
-deriving instance Show (g (BoundTy Index g)) => Show (ReuniterEnv g)
+deriving instance Eq (g (BoundTy g Index)) => Eq (ReuniterEnv g)
+deriving instance Show (g (BoundTy g Index)) => Show (ReuniterEnv g)
 
 newReuniterEnv :: Map TmVar (SrcQuant g) -> ReuniterEnv g
 newReuniterEnv fm = ReuniterEnv fm OM.empty
@@ -100,7 +100,7 @@ addSrcQuant = \case
     us <- traverse freshSkolemVar tyVars
     addBoundTy us g
 
-addBoundTy :: Traversable g => Seq UniqueId -> BoundTy Index g -> ReuniterM g UniqueId
+addBoundTy :: Traversable g => Seq UniqueId -> BoundTy g Index -> ReuniterM g UniqueId
 addBoundTy tyVars = go where
   go (BoundTy gf) = case gf of
     BoundTyVarF ix@(Index i) ->
@@ -141,9 +141,9 @@ resolveTyVar tyv = do
     Just (_, b) -> pure b
     Nothing -> throwError (ReuniterErrMissingVar v)
 
-resolveTmVarRaw :: (Traversable g)
-  => TmVar -> (Maybe Index -> UniqueId -> ReuniterM g (UniqueId, SpecTm h UniqueId))
-  -> ReuniterM g (UniqueId, SpecTm h UniqueId)
+resolveTmVarRaw :: Traversable g
+  => TmVar -> (Maybe Index -> UniqueId -> ReuniterM g (UniqueId, SpecTm h g UniqueId UniqueId))
+  -> ReuniterM g (UniqueId, SpecTm h g UniqueId UniqueId)
 resolveTmVarRaw tmv f = do
   -- First check if this term var has been bound
   mx <- resolveBoundMaybe (VarTm tmv)
@@ -172,12 +172,12 @@ resolveTmVarRaw tmv f = do
               -- Bind metavars and apply function in the environment
               (bodyId, bodySpec) <- bindAllTyVars ps (f Nothing u)
               -- Create spec term
-              let spec = bindSpecTm us bodySpec
+              let spec = bindSpecTm (demoteQuant q) us bodySpec
               pure (bodyId, spec)
 
-resolveTmVar :: (Traversable g)
-  => TmVar -> SpecTm h UniqueId -> (Index -> SpecTm h UniqueId)
-  -> ReuniterM g (UniqueId, SpecTm h UniqueId)
+resolveTmVar :: Traversable g
+  => TmVar -> SpecTm h g UniqueId UniqueId -> (Index -> SpecTm h g UniqueId UniqueId)
+  -> ReuniterM g (UniqueId, SpecTm h g UniqueId UniqueId)
 resolveTmVar tmv onFree onBound = resolveTmVarRaw tmv $ \mi b ->
   pure (b, maybe onFree onBound mi)
 

@@ -5,8 +5,8 @@ license:             BSD3
 author:              "Eric Conlon"
 maintainer:          "ejconlon@gmail.com"
 copyright:           "(c) 2022 Eric Conlon"
-# category:            Undefined
-# synopsis:            Undefined
+category:            Language Tools
+synopsis:            A generic variant of Hindley-Milner
 
 extra-source-files:
 - README.md

@@ -38,8 +38,8 @@ import IntLike.Set (IntLikeSet)
 import qualified IntLike.Set as ILS
 import Lens.Micro (Traversal')
 import Prelude hiding (lookup)
-import Uniter.Core (BoundTy (..), BoundTyF (..), ForAll (..), GenBinder (..), GenQuant, Index (..), Node, Quant (..),
-                    SpecTm, TyVar, UniqueId (..), embedBoundTy)
+import Uniter.Core (BoundTy (..), BoundTyF (..), ForAll (..), GenQuant, Index (..), Node, Quant (..),
+                    SpecTm (..), TyVar, UniqueId (..), embedBoundTy, SpecFinal, SpecTmF (..), SpecInit)
 import Uniter.PreGraph (PreElem (..), PreGraph)
 import qualified Uniter.PreGraph as UP
 
@@ -135,8 +135,8 @@ newtype ResIndex = ResIndex { unResIndex :: Int }
   deriving newtype (Eq, Ord)
 
 data ComplexResSt g = ComplexResSt
-  { crsCache :: !(IntLikeMap UniqueId (BoundTy ResIndex g, Set ResIndex))
-  , crsVars :: !(Seq GenBinder)
+  { crsCache :: !(IntLikeMap UniqueId (BoundTy g ResIndex, Set ResIndex))
+  , crsVars :: !(Seq (Maybe TyVar))
   }
 
 newtype ComplexResM g a = ComplexResM { unComplexResM :: ReaderT (ResEnv g) (StateT (ComplexResSt g) (Except ComplexResErr)) a }
@@ -145,15 +145,15 @@ newtype ComplexResM g a = ComplexResM { unComplexResM :: ReaderT (ResEnv g) (Sta
 runComplexResM :: ComplexResM g a -> Graph g -> Either ComplexResErr a
 runComplexResM m gr = fmap fst (runExcept (runStateT (runReaderT (unComplexResM m) (ResEnv gr ILS.empty)) (ComplexResSt ILM.empty Empty)))
 
-newVarM :: UniqueId -> Maybe TyVar -> ComplexResM g (BoundTy ResIndex g, Set ResIndex)
-newVarM v mayVar = do
+newVarM :: Maybe TyVar -> ComplexResM g (BoundTy g ResIndex, Set ResIndex)
+newVarM mtyv = do
   ix <- state $ \st ->
     let ix = ResIndex (Seq.length (crsVars st))
-        st' = st { crsVars = crsVars st :|> GenBinder v mayVar }
+        st' = st { crsVars = crsVars st :|> mtyv }
       in (ix, st')
   pure (BoundTy (BoundTyVarF ix), Set.singleton ix)
 
-resolveGenVarM :: Traversable g => UniqueId -> ComplexResM g (BoundTy ResIndex g, Set ResIndex)
+resolveGenVarM :: Traversable g => UniqueId -> ComplexResM g (BoundTy g ResIndex, Set ResIndex)
 resolveGenVarM v = do
   mw <- gets (ILM.lookup v . crsCache)
   case mw of
@@ -167,40 +167,62 @@ resolveGenVarM v = do
           Just j -> do
             p <- case j of
               ElemNode x -> local (\re -> re { rePath = ILS.insert v (rePath re) }) (resolveGenNodeM x)
-              ElemMeta mtyv -> newVarM v mtyv
-              ElemSkolem tyv -> newVarM v (Just tyv)
+              ElemMeta mtyv -> newVarM mtyv
+              ElemSkolem tyv -> newVarM (Just tyv)
             modify' (\st -> st { crsCache = ILM.insert v p (crsCache st) })
             pure p
 
 traverseWriter :: (Monoid w, Applicative m, Traversable g) => (a -> m (b, w)) -> g a -> m (g b, w)
 traverseWriter f ga = runWriterT (traverse (WriterT . f) ga)
 
-resolveGenNodeM :: Traversable g => Node g -> ComplexResM g (BoundTy ResIndex g, Set ResIndex)
+resolveGenNodeM :: Traversable g => Node g -> ComplexResM g (BoundTy g ResIndex, Set ResIndex)
 resolveGenNodeM = fmap (first embedBoundTy) . traverseWriter resolveGenVarM
 
-reindex :: Functor g => (i -> j) -> BoundTy i g -> BoundTy j g
-reindex f = go where
+reindexTy :: Functor g => (i -> j) -> BoundTy g i -> BoundTy g j
+reindexTy f = go where
   go (BoundTy bt) = BoundTy $ case bt of
     BoundTyVarF i -> BoundTyVarF (f i)
     BoundTyEmbedF gbt -> BoundTyEmbedF (fmap go gbt)
 
-abstractM :: Traversable g => BoundTy ResIndex g -> Set ResIndex -> ComplexResM g (GenQuant g)
-abstractM bt is =
+abstractTyM :: Traversable g => BoundTy g ResIndex -> Set ResIndex -> ComplexResM g (GenQuant g)
+abstractTyM bt is =
   let failIndex i = error ("Internal error: missing index " ++ show i)
   in if Set.null is
-    then pure $! QuantBare (reindex failIndex bt)
+    then pure $! QuantBare (reindexTy failIndex bt)
     else do
       let renaming = ILM.fromList (zip (Set.toAscList is) (fmap Index [0 ..]))
-          finalBt = reindex (\i -> fromMaybe (failIndex i) (ILM.lookup i renaming)) bt
+          finalBt = reindexTy (\i -> fromMaybe (failIndex i) (ILM.lookup i renaming)) bt
       vars <- gets crsVars
-      let finalVars = Seq.foldlWithIndex (\acc j v -> if ILM.member (ResIndex j) renaming then acc :|> v else acc) Empty vars
+      let finalVars = Seq.foldlWithIndex (\acc j mtyv -> if ILM.member (ResIndex j) renaming then acc :|> mtyv else acc) Empty vars
       pure $! QuantForAll (ForAll finalVars finalBt)
 
-resolveGenVar :: Traversable g => UniqueId -> Graph g -> Either ComplexResErr (GenQuant g)
-resolveGenVar = runComplexResM . (resolveGenVarM >=> uncurry abstractM)
+resolveTmM :: (Bitraversable h, Traversable g) => SpecInit h g -> ComplexResM g (SpecTm h g (BoundTy g ResIndex) ResIndex, Set ResIndex)
+resolveTmM = error "TODO" -- traverseWriter resolveGenVarM
 
-resolveTm :: (Bitraversable h, Traversable g) => SpecTm h UniqueId -> Graph g -> Either ComplexResErr (SpecTm h (GenQuant g))
-resolveTm h gr = traverse (`resolveGenVar` gr) h
+reindexTm :: (Bifunctor h, Functor g) => (i -> j) -> SpecTm h g (BoundTy g i) i -> SpecTm h g (BoundTy g j) j
+reindexTm f = goTm where
+  goTm (SpecTm st) = SpecTm $ case st of
+     SpecTmEmbedF gh -> SpecTmEmbedF (bimap goTy goTm gh)
+     SpecTmSpecF ann bts h -> SpecTmSpecF ann (fmap f bts) (goTm h)
+  goTy = reindexTy f
+
+abstractTmM :: (Bitraversable h, Traversable g) => SpecTm h g (BoundTy g ResIndex) ResIndex -> Set ResIndex -> ComplexResM g (SpecFinal h g)
+abstractTmM h is = error "TODO"
+  -- let failIndex i = error ("Internal error: missing index " ++ show i)
+  -- in if Set.null is
+  --   then pure $! QuantBare (reindexTm failIndex h)
+  --   else do
+  --     let renaming = ILM.fromList (zip (Set.toAscList is) (fmap Index [0 ..]))
+  --         finalH = reindexTm (\i -> fromMaybe (failIndex i) (ILM.lookup i renaming)) h
+  --     vars <- gets crsVars
+  --     let finalVars = Seq.foldlWithIndex (\acc j mtyv -> if ILM.member (ResIndex j) renaming then acc :|> mtyv else acc) Empty vars
+  --     pure $! QuantForAll (ForAll finalVars finalH)
+
+resolveGenVar :: Traversable g => UniqueId -> Graph g -> Either ComplexResErr (GenQuant g)
+resolveGenVar = runComplexResM . (resolveGenVarM >=> uncurry abstractTyM)
+
+resolveTm :: (Bitraversable h, Traversable g) => SpecInit h g -> Graph g -> Either ComplexResErr (SpecFinal h g)
+resolveTm = runComplexResM . (resolveTmM >=> uncurry abstractTmM)
 
 weakenElem :: Elem g -> PreElem g
 weakenElem = \case

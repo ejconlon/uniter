@@ -14,7 +14,7 @@ import IntLike.Set (IntLikeSet)
 import qualified IntLike.Set as ILS
 import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
-import Uniter.Core (Index (..), Level (..), recGenQuant, recSpecTm, tupleToPair)
+import Uniter.Core (Index (..), Level (..), Quant (..), recGenQuant, recSpecTm, tupleToPair)
 import Uniter.Example.Complex (InferCase (..), inferCases, inferWithFunDefs)
 import qualified Uniter.Example.Complex as Complex
 import qualified Uniter.Example.Simple as Simple
@@ -234,7 +234,7 @@ testExampleComplex = testUnit "complex example" $ do
   let expLinTm = x1
       expLinTy = Complex.TyPair Complex.TyInt Complex.TyInt
   (actualLinTm, actualLinTy) <- quickReuniteResult mempty Complex.exampleLinear
-  actualLinTm === recSpecTm expLinTm
+  actualLinTm === QuantBare (recSpecTm expLinTm)
   actualLinTy === recGenQuant expLinTy
 
 runInferCase :: InferCase -> TestTree

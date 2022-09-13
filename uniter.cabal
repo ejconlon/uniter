@@ -6,7 +6,9 @@ cabal-version: 1.12
 
 name:           uniter
 version:        0.4.0
+synopsis:       A generic variant of Hindley-Milner
 description:    Please see the README on GitHub at <https://github.com/ejconlon/uniter#readme>
+category:       Language Tools
 homepage:       https://github.com/ejconlon/uniter#readme
 bug-reports:    https://github.com/ejconlon/uniter/issues
 author:         Eric Conlon
