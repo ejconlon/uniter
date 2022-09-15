@@ -23,9 +23,10 @@ module Uniter.Core
   , forAllQuantTy
   , SrcQuant
   , recSrcQuant
+  , ContextTy (..)
+  , varContextTy
   , GenQuant
   , recGenQuant
-  , demoteQuant
   , SpecTm (..)
   , SpecTmF (..)
   , recSpecTm
@@ -50,8 +51,8 @@ newtype UniqueId = UniqueId { unUniqueId :: Int }
   deriving stock (Show)
   deriving newtype (Eq, Ord, Enum, Num)
 
--- | A 'Node' is a structure with all the holes filled with 'UniqueId's.
-type Node g = g UniqueId
+-- | A 'Node' is a structure with all the holes filled with types.
+type Node g = g (ContextTy g)
 
 -- | An 'Event' can be processed
 data Event g =
@@ -59,7 +60,6 @@ data Event g =
   | EventConstrainEq !UniqueId !UniqueId !UniqueId
   | EventNewMetaVar !(Maybe TyVar) !UniqueId
   | EventNewSkolemVar !TyVar !UniqueId
-  -- | EventNewPolyVar !(Seq UniqueId) !UniqueId
 
 deriving instance Eq (Node g) => Eq (Event g)
 deriving instance Ord (Node g) => Ord (Event g)
@@ -164,6 +164,20 @@ type SrcQuant g = Quant TyVar (BoundTy g Index)
 recSrcQuant :: (Recursive u, Base u ~ g) => u -> SrcQuant g
 recSrcQuant = QuantBare . recBoundTy
 
+-- | Either a polytype (deferred unification) or a monotype (eager unification)
+data ContextTy g =
+    ContextTyPoly !(SrcQuant g)
+  | ContextTyMono !UniqueId
+
+deriving instance Eq (g (BoundTy g Index)) => Eq (ContextTy g)
+deriving instance Show (g (BoundTy g Index)) => Show (ContextTy g)
+
+varContextTy :: UniqueId -> ContextTy g
+varContextTy = ContextTyMono
+
+-- | A polytype in progress
+-- type SolveQuant g = Quant TyVar (BoundTy g (Either UniqueId Index))
+
 -- | A polytype
 type GenQuant g = Quant (Maybe TyVar) (BoundTy g Index)
 
@@ -171,14 +185,14 @@ recGenQuant :: (Recursive u, Base u ~ g) => u -> GenQuant g
 recGenQuant = QuantBare . recBoundTy
 
 -- | Convert a SrcQuant into a GenQuant (a weaker type; we already have all the optional info)
-demoteQuant :: SrcQuant g -> GenQuant g
-demoteQuant = \case
-  QuantBare bt -> QuantBare bt
-  QuantForAll (ForAll xs bt) -> QuantForAll (ForAll (fmap Just xs) bt)
+-- demoteQuant :: SrcQuant g -> GenQuant g
+-- demoteQuant = \case
+--   QuantBare bt -> QuantBare bt
+--   QuantForAll (ForAll xs bt) -> QuantForAll (ForAll (fmap Just xs) bt)
 
 -- | The base functor for 'SpecTm'
 data SpecTmF (h :: Type -> Type -> Type) (g :: Type -> Type) (a :: Type) (i :: Type) (r :: Type) =
-    SpecTmSpecF !(GenQuant g) !(Seq i) !r
+    SpecTmSpecF !(SrcQuant g) !(Seq i) !r
   | SpecTmEmbedF !(h a r)
   deriving stock (Functor, Foldable, Traversable)
 
@@ -218,7 +232,7 @@ embedSpecTm :: h a (SpecTm h g a i) -> SpecTm h g a i
 embedSpecTm = SpecTm . SpecTmEmbedF
 
 -- | Specializes a term.
-bindSpecTm :: GenQuant g -> Seq i -> SpecTm h g a i -> SpecTm h g a i
+bindSpecTm :: SrcQuant g -> Seq i -> SpecTm h g a i -> SpecTm h g a i
 bindSpecTm a is s = SpecTm (SpecTmSpecF a is s)
 
 -- | The initial reconstructed term - unsolved annotations and specializations

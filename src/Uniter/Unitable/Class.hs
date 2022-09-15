@@ -19,7 +19,7 @@ class (Traversable g, Monad m) => MonadUniter g m | m -> g where
   uniterConstrainEq :: UniqueId -> UniqueId -> m UniqueId
 
   -- | Bind the type of the given term variable in the given scope.
-  uniterBindTmVar :: TmVar -> UniqueId -> m a -> m a
+  uniterBindTmVar :: TmVar -> m a -> m a
 
   -- | Lookup the type metavar of the given term variable in the given scope
   uniterResolveTmVar :: TmVar -> m UniqueId
@@ -28,7 +28,7 @@ instance Traversable g => MonadUniter g (ReuniterM g) where
   uniterAddBaseTy = addBaseTy
   uniterFreshVar = freshMetaVar
   uniterConstrainEq = constrainEq
-  uniterBindTmVar = bindTmVar
+  uniterBindTmVar v = bindTmVar v Nothing
   uniterResolveTmVar v = fmap fst (resolveTmVar v dummySpecTm (const dummySpecTm))
 
 -- | Describes the unification process for a particular expression functor 'f':

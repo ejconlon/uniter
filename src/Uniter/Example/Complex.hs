@@ -18,7 +18,7 @@ module Uniter.Example.Complex
   , main
   ) where
 
-import Control.Monad (void, (>=>))
+import Control.Monad (void)
 import Control.Monad.Catch (MonadThrow (..))
 import Data.Bifunctor.TH (deriveBifoldable, deriveBifunctor, deriveBitraversable)
 import Data.Foldable (for_)
@@ -151,14 +151,15 @@ instance Reunitable ExpF AnnExpF TyF where
       _ <- reuniterConstrainEq y i
       pure (x, embedSpecTm (AnnExpAppF si sj))
     ExpAbsF n mt mi -> do
-      x <- maybe (reuniterFreshVar Nothing) reuniterAddSrcQuant mt
-      (y, sy) <- reuniterBindTmVar n x mi
-      pure (y, embedSpecTm (AnnExpAbsF n y sy))
+      (cy, sy@(iy, jy)) <- reuniterBindTmVar n mt mi
+      y <- reuniterAddBaseTy (TyFunF cy iy)
+      -- pure (y, embedSpecTm (AnnExpAbsF n cy sy))
+      error "TODO"
     ExpLetF n mt mi mj -> do
-      (i, si) <- mi
-      i' <- maybe (pure i) (reuniterAddSrcQuant >=> reuniterConstrainEq i) mt
-      (y, sy) <- reuniterBindTmVar n i' mj
-      pure (y, embedSpecTm (AnnExpLetF n i' si sy))
+      -- (i, si) <- mi
+      -- (cy, sy) <- reuniterBindTmVar n mt mj
+      -- pure (sy, embedSpecTm (AnnExpLetF n cy si sy))
+      error "TODO"
 
 -- | A small example of type (C, C)
 exampleLinear :: Exp
