@@ -18,7 +18,7 @@ module Uniter.Example.Complex
   , main
   ) where
 
-import Control.Monad (void, (>=>))
+import Control.Monad (void)
 import Control.Monad.Catch (MonadThrow (..))
 import Data.Bifunctor.TH (deriveBifoldable, deriveBifunctor, deriveBitraversable)
 import Data.Foldable (for_)
@@ -29,8 +29,8 @@ import qualified Data.Sequence as Seq
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
 import Uniter.Align (Alignable (..), UnalignableErr (..))
-import Uniter.Core (Index, PolyTy, Quant (..), SpecFinal, TmVar, TyBinder (..), bareQuantTy, embedBoundTy, embedSpecTm,
-                    forAllQuantTy, recSpecTm, varBoundTy)
+import Uniter.Core (Index, PolyTy, Quant (..), SpecFinal, TmVar, TyBinder (..), UniqueId, bareQuantTy, bindSpecTm,
+                    embedBoundTy, embedSpecTm, forAllQuantTy, monoToBoundTy, recSpecTm, varBoundTy)
 import Uniter.Render (writeGraphDot, writePreGraphDot)
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
 import Uniter.Reunitable.Driver (ReuniteResult, ReuniteSuccess (..), reuniteResult)
@@ -102,7 +102,7 @@ instance Alignable UnalignableErr TyF where
       (TyPairF xa xb, TyPairF ya yb) -> Right (TyPairF (These xa ya) (These xb yb))
       _ -> Left UnalignableErr
 
-instance Reunitable (ExpF Ty) AnnExpF TyF where
+instance Reunitable (ExpF UniqueId) AnnExpF TyF where
   reunite = \case
     ExpIntF c -> do
       x <- reuniterAddNodeTy TyIntF
@@ -155,17 +155,17 @@ instance Reunitable (ExpF Ty) AnnExpF TyF where
       _ <- reuniterConstrainEq y i
       pure (x, embedSpecTm (AnnExpAppF si sj))
     ExpAbsF n mt mi -> do
-      x <- maybe (reuniterFreshVar (TyBinder Nothing)) reuniterAddMonoTy mt
+      x <- maybe (reuniterFreshVar (TyBinder Nothing)) pure mt
       (y, sy) <- reuniterBindTmVar n x mi
       pure (y, embedSpecTm (AnnExpAbsF n y sy))
     ExpLetF n mt mi mj -> do
       (i, si) <- mi
-      i' <- maybe (pure i) (reuniterAddMonoTy >=> reuniterConstrainEq i) mt
+      i' <- maybe (pure i) (reuniterConstrainEq i) mt
       (y, sy) <- reuniterBindTmVar n i' mj
       pure (y, embedSpecTm (AnnExpLetF n i' si sy))
 
 -- | A small example of type (C, C)
-exampleLinear :: Exp Ty
+exampleLinear :: Exp ty
 exampleLinear =
   let x1 = ExpLet "v1" Nothing (ExpInt 1) x2
       x2 = ExpLet "v2" Nothing (ExpTuple (ExpFree "v1") (ExpFree "v1")) x3
@@ -174,7 +174,7 @@ exampleLinear =
   in x1
 
 -- | An example that can easily grow larger: ((C, C), ((C, C), (C, C)))
-exampleExponential :: Exp Ty
+exampleExponential :: Exp ty
 exampleExponential =
   let x1 = ExpLet "v1" Nothing (ExpInt 1) x2
       x2 = ExpLet "v2" Nothing (ExpTuple (ExpFree "v1") (ExpFree "v1")) x3
@@ -195,18 +195,18 @@ funDefs = Map.fromList
 
 data InferCase = InferCase
   { icName :: !String
-  , icTm :: !(Exp Ty)
+  , icTm :: !(Exp UniqueId)
   , icExpected :: !(Maybe (SpecFinal AnnExpF TyF, PolyTy TyF))
   } deriving stock (Eq, Show)
 
 inferCases :: [InferCase]
 inferCases =
   [ InferCase "zero" (ExpFree "zero") (Just (QuantBare (recSpecTm (AnnExpFree "zero")), bareQuantTy TyInt))
-  -- , InferCase "succ" (ExpFree "succ") (Just (recSpecTm (AnnExpFree "succ"), bareQuant (TyFun TyInt TyInt)))
-  -- , InferCase "succ-zero" (ExpApp (ExpFree "succ") (ExpFree "zero")) (Just (recSpecTm (AnnExpApp (AnnExpFree "succ") (AnnExpFree "zero")), bareQuant TyInt))
-  -- , -- succ undefined (should be int ty with the undefined specialized with int)
-  --   let recon = embedSpecTm (AnnExpAppF (recSpecTm (AnnExpFree "succ")) (bindSpecTm (Seq.singleton (bareQuant TyInt)) (recSpecTm (AnnExpFree "undefined"))))
-  --   in InferCase "succ-undefined" (ExpApp (ExpFree "succ") (ExpFree "undefined")) (Just (recon, bareQuant TyInt))
+  , InferCase "succ" (ExpFree "succ") (Just (QuantBare (recSpecTm (AnnExpFree "succ")), bareQuantTy (TyFun TyInt TyInt)))
+  , InferCase "succ-zero" (ExpApp (ExpFree "succ") (ExpFree "zero")) (Just (QuantBare (recSpecTm (AnnExpApp (AnnExpFree "succ") (AnnExpFree "zero"))), bareQuantTy TyInt))
+  , -- succ undefined (should be int ty with the undefined specialized with int)
+    let recon = embedSpecTm (AnnExpAppF (recSpecTm (AnnExpFree "succ")) (bindSpecTm (funDefs Map.! "undefined") (Seq.singleton (monoToBoundTy TyInt)) (recSpecTm (AnnExpFree "undefined"))))
+    in InferCase "succ-undefined" (ExpApp (ExpFree "succ") (ExpFree "undefined")) (Just (QuantBare recon, bareQuantTy TyInt))
   -- , -- id zero (should be int ty with id specialized with int)
   --   let recon = embedSpecTm (AnnExpAppF (bindSpecTm (Seq.singleton (bareQuant TyInt)) (recSpecTm (AnnExpFree "id"))) (recSpecTm (AnnExpFree "zero")))
   --   in InferCase "id-zero" (ExpApp (ExpFree "id") (ExpFree "zero")) (Just (recon, bareQuant TyInt))
@@ -219,12 +219,12 @@ inferCases =
   --   in InferCase "id-undefined" (ExpApp (ExpFree "id") (ExpFree "undefined")) (Just (recon, ty))
   ]
 
-inferWithFunDefs :: Exp Ty -> ReuniteResult UnalignableErr AnnExpF TyF
+inferWithFunDefs :: Exp UniqueId -> ReuniteResult UnalignableErr AnnExpF TyF
 inferWithFunDefs = snd . reuniteResult funDefs
 
 -- | A complete example of how to infer the type of an expression
 -- with unification through 'Unitable' and 'Alignable'.
-processVerbose :: String -> Exp Ty -> IO (PolyTy TyF)
+processVerbose :: String -> Exp UniqueId -> IO (PolyTy TyF)
 processVerbose name expr = go where
   go = do
     putStrLn ("*** Processing example: " ++ show name)

@@ -14,7 +14,7 @@ import IntLike.Set (IntLikeSet)
 import qualified IntLike.Set as ILS
 import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
-import Uniter.Core (Index (..), Level (..), Quant (..), monoToPolyTy, recSpecTm)
+import Uniter.Core (Index (..), Level (..), Quant (..), UniqueId, monoToPolyTy, recSpecTm)
 import Uniter.Example.Complex (InferCase (..), inferCases, inferWithFunDefs)
 import qualified Uniter.Example.Complex as Complex
 import qualified Uniter.Example.Simple as Simple
@@ -228,7 +228,7 @@ testExampleComplex = testUnit "complex example" $ do
       x4 = Complex.AnnExpBound 0
   let expLinTm = x1
       expLinTy = Complex.TyPair Complex.TyInt Complex.TyInt
-  (actualLinTm, actualLinTy) <- quickReuniteResult mempty Complex.exampleLinear
+  (actualLinTm, actualLinTy) <- quickReuniteResult mempty (Complex.exampleLinear @UniqueId)
   actualLinTm === QuantBare (recSpecTm expLinTm)
   actualLinTy === monoToPolyTy expLinTy
 
