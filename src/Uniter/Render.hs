@@ -15,7 +15,7 @@ import qualified Algebra.Graph.Export as AGE
 import qualified Algebra.Graph.Export.Dot as AGED
 import Data.Foldable (toList)
 import qualified Data.Text as T
-import Uniter.Core (TyVar (..), UniqueId (..))
+import Uniter.Core (TyBinder (..), TyVar (..), UniqueId (..))
 import Uniter.Graph (Elem (..), Graph)
 import qualified Uniter.Graph as UG
 import Uniter.PreGraph (PreElem (..), PreGraph)
@@ -27,15 +27,15 @@ reprUniqueId = show . unUniqueId
 reprElem :: (Show (g Int), Functor g) => Elem g -> String
 reprElem = \case
   ElemNode n -> unwords ["Node", show (fmap unUniqueId n)]
-  ElemMeta mtyv -> maybe "Meta" (\(TyVar n) -> "Meta " ++ T.unpack n) mtyv
-  ElemSkolem (TyVar n) -> "Skolem " ++ T.unpack n
+  ElemMeta tyb -> maybe "Meta" (\(TyVar n) -> "Meta " ++ T.unpack n) (unTyBinder tyb)
+  ElemSkolem tyb -> maybe "Skolem" (\(TyVar n) -> "Skolem " ++ T.unpack n) (unTyBinder tyb)
 
 reprPreElem :: (Show (g Int), Functor g) => PreElem g -> String
 reprPreElem = \case
   PreElemNode n -> unwords ["Node", show (fmap unUniqueId n)]
   PreElemEq i j -> unwords ["Eq", reprUniqueId i, reprUniqueId j]
-  PreElemMeta mtyv -> maybe "Meta" (\(TyVar n) -> "Meta " ++ T.unpack n) mtyv
-  PreElemSkolem (TyVar n) -> "Skolem " ++ T.unpack n
+  PreElemMeta tyb -> maybe "Meta" (\(TyVar n) -> "Meta " ++ T.unpack n) (unTyBinder tyb)
+  PreElemSkolem tyb -> maybe "Skolem" (\(TyVar n) -> "Skolem " ++ T.unpack n) (unTyBinder tyb)
 
 elemChildren :: Foldable g => Elem g -> [UniqueId]
 elemChildren = \case

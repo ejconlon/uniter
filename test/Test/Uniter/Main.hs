@@ -14,7 +14,7 @@ import IntLike.Set (IntLikeSet)
 import qualified IntLike.Set as ILS
 import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
-import Uniter.Core (Index (..), Level (..), Quant (..), recGenQuant, recSpecTm, tupleToPair)
+import Uniter.Core (Index (..), Level (..), Quant (..), monoToPolyTy, recSpecTm)
 import Uniter.Example.Complex (InferCase (..), inferCases, inferWithFunDefs)
 import qualified Uniter.Example.Complex as Complex
 import qualified Uniter.Example.Simple as Simple
@@ -173,47 +173,42 @@ testOmUnit = testUnit "OM unit" $ do
   OM.order x === Empty
   OM.toList x === []
   OM.fromList [] === x
-  OM.lookup 'a' x === Nothing
-  OM.lookup 'b' x === Nothing
-  OM.unsnoc x === Nothing
+  OM.lookupByKey 'a' x === Nothing
+  OM.lookupByKey 'b' x === Nothing
   -- [(a, 1)]
-  let y = OM.snoc x 'a' 1
+  let y = OM.snoc x (Just 'a') 1
   OM.level y === Level 1
-  OM.order y === Seq.fromList [(Index 0, 'a', 1)]
-  OM.toList y === [('a', 1)]
-  OM.fromList [('a', 1)] === y
-  OM.lookup 'a' y === Just (Index 0, 1)
-  OM.lookup 'b' y === Nothing
-  OM.unsnoc y === Just (x, 'a', 1)
+  OM.order y === Seq.fromList [(Index 0, Just 'a', 1)]
+  OM.toList y === [(Just 'a', 1)]
+  OM.fromList [(Just 'a', 1)] === y
+  OM.lookupByKey 'a' y === Just (Index 0, 1)
+  OM.lookupByKey 'b' y === Nothing
   -- [(a, 1), (b, 2)]
-  let z = OM.snoc y 'b' 2
+  let z = OM.snoc y (Just 'b') 2
   OM.level z === Level 2
-  OM.order z === Seq.fromList [(Index 1, 'a', 1), (Index 0, 'b', 2)]
-  OM.toList z === [('a', 1), ('b', 2)]
-  OM.fromList [('a', 1), ('b', 2)] === z
-  OM.lookup 'a' z === Just (Index 1, 1)
-  OM.lookup 'b' z === Just (Index 0, 2)
-  OM.unsnoc z === Just (y, 'b', 2)
+  OM.order z === Seq.fromList [(Index 1, Just 'a', 1), (Index 0, Just 'b', 2)]
+  OM.toList z === [(Just 'a', 1), (Just 'b', 2)]
+  OM.fromList [(Just 'a', 1), (Just 'b', 2)] === z
+  OM.lookupByKey 'a' z === Just (Index 1, 1)
+  OM.lookupByKey 'b' z === Just (Index 0, 2)
   -- [(a, 1), (b, 2), (a, 3)]
-  let w = OM.snoc z 'a' 3
+  let w = OM.snoc z (Just 'a') 3
   OM.level w === Level 3
-  OM.order w === Seq.fromList [(Index 1, 'b', 2), (Index 0, 'a', 3)]
-  OM.toList w === [('a', 1), ('b', 2), ('a', 3)]
-  OM.fromList [('a', 1), ('b', 2), ('a', 3)] === w
-  OM.lookup 'a' w === Just (Index 0, 3)
-  OM.lookup 'b' w === Just (Index 1, 2)
-  OM.unsnoc w === Just (z, 'a', 3)
+  OM.order w === Seq.fromList [(Index 1, Just 'b', 2), (Index 0, Just 'a', 3)]
+  OM.toList w === [(Just 'a', 1), (Just 'b', 2), (Just 'a', 3)]
+  OM.fromList [(Just 'a', 1), (Just 'b', 2), (Just 'a', 3)] === w
+  OM.lookupByKey 'a' w === Just (Index 0, 3)
+  OM.lookupByKey 'b' w === Just (Index 1, 2)
   -- [(a, 1), (b, 2), (a, 3), (a, 4)]
-  let v = OM.snoc w 'a' 4
+  let v = OM.snoc w (Just 'a') 4
   OM.level v === Level 4
-  OM.order v === Seq.fromList [(Index 2, 'b', 2), (Index 0, 'a', 4)]
-  OM.toList v === [('a', 1), ('b', 2), ('a', 3), ('a', 4)]
-  OM.fromList [('a', 1), ('b', 2), ('a', 3), ('a', 4)] === v
-  OM.lookup 'a' v === Just (Index 0, 4)
-  OM.lookup 'b' v === Just (Index 2, 2)
-  OM.unsnoc v === Just (w, 'a', 4)
+  OM.order v === Seq.fromList [(Index 2, Just 'b', 2), (Index 0, Just 'a', 4)]
+  OM.toList v === [(Just 'a', 1), (Just 'b', 2), (Just 'a', 3), (Just 'a', 4)]
+  OM.fromList [(Just 'a', 1), (Just 'b', 2), (Just 'a', 3), (Just 'a', 4)] === v
+  OM.lookupByKey 'a' v === Just (Index 0, 4)
+  OM.lookupByKey 'b' v === Just (Index 2, 2)
   -- snoc all
-  let v' = OM.snocAll y (Seq.fromList (fmap tupleToPair [('b', 2), ('a', 3), ('a', 4)]))
+  let v' = OM.snocAll y (Seq.fromList [(Just 'b', 2), (Just 'a', 3), (Just 'a', 4)])
   v' === v
 
 testExampleSimple :: TestTree
@@ -227,15 +222,15 @@ testExampleSimple = testUnit "simple example" $ do
 
 testExampleComplex :: TestTree
 testExampleComplex = testUnit "complex example" $ do
-  let x1 = Complex.AnnExpLet "v1" (recGenQuant Complex.TyInt) (Complex.AnnExpInt 1) x2
-      x2 = Complex.AnnExpLet "v2" (recGenQuant (Complex.TyPair Complex.TyInt Complex.TyInt)) (Complex.AnnExpTuple (Complex.AnnExpBound 0) (Complex.AnnExpBound 0)) x3
-      x3 = Complex.AnnExpLet "v3" (recGenQuant (Complex.TyPair Complex.TyInt Complex.TyInt)) (Complex.AnnExpTuple (Complex.AnnExpSecond (Complex.AnnExpBound 0)) (Complex.AnnExpFirst (Complex.AnnExpBound 0))) x4
+  let x1 = Complex.AnnExpLet "v1" (monoToPolyTy Complex.TyInt) (Complex.AnnExpInt 1) x2
+      x2 = Complex.AnnExpLet "v2" (monoToPolyTy (Complex.TyPair Complex.TyInt Complex.TyInt)) (Complex.AnnExpTuple (Complex.AnnExpBound 0) (Complex.AnnExpBound 0)) x3
+      x3 = Complex.AnnExpLet "v3" (monoToPolyTy (Complex.TyPair Complex.TyInt Complex.TyInt)) (Complex.AnnExpTuple (Complex.AnnExpSecond (Complex.AnnExpBound 0)) (Complex.AnnExpFirst (Complex.AnnExpBound 0))) x4
       x4 = Complex.AnnExpBound 0
   let expLinTm = x1
       expLinTy = Complex.TyPair Complex.TyInt Complex.TyInt
   (actualLinTm, actualLinTy) <- quickReuniteResult mempty Complex.exampleLinear
   actualLinTm === QuantBare (recSpecTm expLinTm)
-  actualLinTy === recGenQuant expLinTy
+  actualLinTy === monoToPolyTy expLinTy
 
 runInferCase :: InferCase -> TestTree
 runInferCase (InferCase name tm expected) = testUnit name $ do

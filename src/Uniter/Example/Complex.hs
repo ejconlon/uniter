@@ -28,9 +28,9 @@ import qualified Data.Map.Strict as Map
 import qualified Data.Sequence as Seq
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
-import Uniter (Alignable (..), GenQuant, SpecFinal, SrcQuant, UnalignableErr (..), bareQuantTy, embedBoundTy,
-               forAllQuantTy, recSpecTm, varBoundTy)
-import Uniter.Core (Index, Quant (..), TmVar, embedSpecTm)
+import Uniter.Align (Alignable (..), UnalignableErr (..))
+import Uniter.Core (Index, PolyTy, Quant (..), SpecFinal, TmVar, TyBinder (..), bareQuantTy, embedBoundTy, embedSpecTm,
+                    forAllQuantTy, recSpecTm, varBoundTy)
 import Uniter.Render (writeGraphDot, writePreGraphDot)
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
 import Uniter.Reunitable.Driver (ReuniteResult, ReuniteSuccess (..), reuniteResult)
@@ -47,24 +47,28 @@ deriving stock instance Eq r => Eq (TyF r)
 deriving stock instance Ord r => Ord (TyF r)
 deriving stock instance Show r => Show (TyF r)
 
-data Exp =
+data Exp ty =
     ExpFree !TmVar
   | ExpInt !Int
-  | ExpAdd Exp Exp
-  | ExpIfZero Exp Exp Exp
-  | ExpTuple Exp Exp
-  | ExpFirst Exp
-  | ExpSecond Exp
-  | ExpApp Exp Exp
-  | ExpAbs !TmVar !(Maybe (SrcQuant TyF)) !Exp
-  | ExpLet !TmVar !(Maybe (SrcQuant TyF)) !Exp !Exp
+  | ExpAdd (Exp ty) (Exp ty)
+  | ExpIfZero (Exp ty) (Exp ty) (Exp ty)
+  | ExpTuple (Exp ty) (Exp ty)
+  | ExpFirst (Exp ty)
+  | ExpSecond (Exp ty)
+  | ExpApp (Exp ty) (Exp ty)
+  | ExpAbs !TmVar !(Maybe ty) !(Exp ty)
+  | ExpLet !TmVar !(Maybe ty) !(Exp ty) !(Exp ty)
   deriving stock (Eq, Ord, Show)
 
 makeBaseFunctor ''Exp
 
-deriving stock instance Eq r => Eq (ExpF r)
-deriving stock instance Ord r => Ord (ExpF r)
-deriving stock instance Show r => Show (ExpF r)
+deriving stock instance (Eq r, Eq ty) => Eq (ExpF ty r)
+deriving stock instance (Ord r, Ord ty) => Ord (ExpF ty r)
+deriving stock instance (Show r, Show ty) => Show (ExpF ty r)
+
+deriveBifunctor ''ExpF
+deriveBifoldable ''ExpF
+deriveBitraversable ''ExpF
 
 data AnnExp ty =
     AnnExpBound !Index
@@ -98,15 +102,15 @@ instance Alignable UnalignableErr TyF where
       (TyPairF xa xb, TyPairF ya yb) -> Right (TyPairF (These xa ya) (These xb yb))
       _ -> Left UnalignableErr
 
-instance Reunitable ExpF AnnExpF TyF where
+instance Reunitable (ExpF Ty) AnnExpF TyF where
   reunite = \case
     ExpIntF c -> do
-      x <- reuniterAddBaseTy TyIntF
+      x <- reuniterAddNodeTy TyIntF
       pure (x, embedSpecTm (AnnExpIntF c))
     ExpAddF mi mj -> do
       (i, si) <- mi
       (j, sj) <- mj
-      x <- reuniterAddBaseTy TyIntF
+      x <- reuniterAddNodeTy TyIntF
       _ <- reuniterConstrainEq x i
       _ <- reuniterConstrainEq x j
       pure (x, embedSpecTm (AnnExpAddF si sj))
@@ -114,8 +118,8 @@ instance Reunitable ExpF AnnExpF TyF where
       (i, si) <- mi
       (j, sj) <- mj
       (k, sk) <- mk
-      x <- reuniterAddBaseTy TyIntF
-      y <- reuniterFreshVar Nothing
+      x <- reuniterAddNodeTy TyIntF
+      y <- reuniterFreshVar (TyBinder Nothing)
       _ <- reuniterConstrainEq x i
       _ <- reuniterConstrainEq y j
       _ <- reuniterConstrainEq y k
@@ -123,20 +127,20 @@ instance Reunitable ExpF AnnExpF TyF where
     ExpTupleF mi mj -> do
       (i, si) <- mi
       (j, sj) <- mj
-      z <- reuniterAddBaseTy (TyPairF i j)
+      z <- reuniterAddNodeTy (TyPairF i j)
       pure (z, embedSpecTm (AnnExpTupleF si sj))
     ExpFirstF mi -> do
       (i, si) <- mi
-      v <- reuniterFreshVar Nothing
-      w <- reuniterFreshVar Nothing
-      y <- reuniterAddBaseTy (TyPairF v w)
+      v <- reuniterFreshVar (TyBinder Nothing)
+      w <- reuniterFreshVar (TyBinder Nothing)
+      y <- reuniterAddNodeTy (TyPairF v w)
       _ <- reuniterConstrainEq i y
       pure (v, embedSpecTm (AnnExpFirstF si))
     ExpSecondF mi -> do
       (i, si) <- mi
-      v <- reuniterFreshVar Nothing
-      w <- reuniterFreshVar Nothing
-      y <- reuniterAddBaseTy (TyPairF v w)
+      v <- reuniterFreshVar (TyBinder Nothing)
+      w <- reuniterFreshVar (TyBinder Nothing)
+      y <- reuniterAddNodeTy (TyPairF v w)
       _ <- reuniterConstrainEq i y
       pure (w, embedSpecTm (AnnExpSecondF si))
     ExpFreeF n ->
@@ -146,22 +150,22 @@ instance Reunitable ExpF AnnExpF TyF where
     ExpAppF mi mj -> do
       (i, si) <- mi
       (j, sj) <- mj
-      x <- reuniterFreshVar Nothing
-      y <- reuniterAddBaseTy (TyFunF j x)
+      x <- reuniterFreshVar (TyBinder Nothing)
+      y <- reuniterAddNodeTy (TyFunF j x)
       _ <- reuniterConstrainEq y i
       pure (x, embedSpecTm (AnnExpAppF si sj))
     ExpAbsF n mt mi -> do
-      x <- maybe (reuniterFreshVar Nothing) reuniterAddSrcQuant mt
+      x <- maybe (reuniterFreshVar (TyBinder Nothing)) reuniterAddMonoTy mt
       (y, sy) <- reuniterBindTmVar n x mi
       pure (y, embedSpecTm (AnnExpAbsF n y sy))
     ExpLetF n mt mi mj -> do
       (i, si) <- mi
-      i' <- maybe (pure i) (reuniterAddSrcQuant >=> reuniterConstrainEq i) mt
+      i' <- maybe (pure i) (reuniterAddMonoTy >=> reuniterConstrainEq i) mt
       (y, sy) <- reuniterBindTmVar n i' mj
       pure (y, embedSpecTm (AnnExpLetF n i' si sy))
 
 -- | A small example of type (C, C)
-exampleLinear :: Exp
+exampleLinear :: Exp Ty
 exampleLinear =
   let x1 = ExpLet "v1" Nothing (ExpInt 1) x2
       x2 = ExpLet "v2" Nothing (ExpTuple (ExpFree "v1") (ExpFree "v1")) x3
@@ -170,7 +174,7 @@ exampleLinear =
   in x1
 
 -- | An example that can easily grow larger: ((C, C), ((C, C), (C, C)))
-exampleExponential :: Exp
+exampleExponential :: Exp Ty
 exampleExponential =
   let x1 = ExpLet "v1" Nothing (ExpInt 1) x2
       x2 = ExpLet "v2" Nothing (ExpTuple (ExpFree "v1") (ExpFree "v1")) x3
@@ -180,7 +184,7 @@ exampleExponential =
   in x1
 
 -- | Some examples of functions (including polymorphic ones)
-funDefs :: Map TmVar (SrcQuant TyF)
+funDefs :: Map TmVar (PolyTy TyF)
 funDefs = Map.fromList
   [ ("undefined", forAllQuantTy (Seq.fromList ["a"]) (varBoundTy 0))
   , ("id", forAllQuantTy (Seq.fromList ["a"]) (embedBoundTy (TyFunF (varBoundTy 0) (varBoundTy 0))))
@@ -191,8 +195,8 @@ funDefs = Map.fromList
 
 data InferCase = InferCase
   { icName :: !String
-  , icTm :: !Exp
-  , icExpected :: !(Maybe (SpecFinal AnnExpF TyF, GenQuant TyF))
+  , icTm :: !(Exp Ty)
+  , icExpected :: !(Maybe (SpecFinal AnnExpF TyF, PolyTy TyF))
   } deriving stock (Eq, Show)
 
 inferCases :: [InferCase]
@@ -215,12 +219,12 @@ inferCases =
   --   in InferCase "id-undefined" (ExpApp (ExpFree "id") (ExpFree "undefined")) (Just (recon, ty))
   ]
 
-inferWithFunDefs :: Exp -> ReuniteResult UnalignableErr AnnExpF TyF
+inferWithFunDefs :: Exp Ty -> ReuniteResult UnalignableErr AnnExpF TyF
 inferWithFunDefs = snd . reuniteResult funDefs
 
 -- | A complete example of how to infer the type of an expression
 -- with unification through 'Unitable' and 'Alignable'.
-processVerbose :: String -> Exp -> IO (GenQuant TyF)
+processVerbose :: String -> Exp Ty -> IO (PolyTy TyF)
 processVerbose name expr = go where
   go = do
     putStrLn ("*** Processing example: " ++ show name)

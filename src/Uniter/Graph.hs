@@ -38,15 +38,15 @@ import IntLike.Set (IntLikeSet)
 import qualified IntLike.Set as ILS
 import Lens.Micro (Traversal')
 import Prelude hiding (lookup)
-import Uniter.Core (BoundTy (..), BoundTyF (..), ForAll (..), GenQuant, Index (..), Node, Quant (..),
-                    SpecTm (..), TyVar, UniqueId (..), embedBoundTy, SpecFinal, SpecTmF (..), SpecInit)
+import Uniter.Core (BoundTy (..), BoundTyF (..), ForAll (..), Index (..), Node, PolyTy, Quant (..), SpecFinal, SpecInit,
+                    SpecTm (..), SpecTmF (..), TyBinder (..), UniqueId (..), embedBoundTy)
 import Uniter.PreGraph (PreElem (..), PreGraph)
 import qualified Uniter.PreGraph as UP
 
 data Elem g =
     ElemNode !(Node g)
-  | ElemMeta !(Maybe TyVar)
-  | ElemSkolem !TyVar
+  | ElemMeta !TyBinder
+  | ElemSkolem !TyBinder
 
 deriving stock instance Eq (Node g) => Eq (Elem g)
 deriving stock instance Ord (Node g) => Ord (Elem g)
@@ -86,8 +86,8 @@ data ResEnv g = ResEnv
 data SimpleResErr =
     SimpleResErrLoop !UniqueId
   | SimpleResErrNotFound !UniqueId
-  | SimpleResErrUnsolvedMeta !UniqueId !(Maybe TyVar)
-  | SimpleResErrUnsupportedSkolem !UniqueId !TyVar
+  | SimpleResErrUnsolvedMeta !UniqueId !TyBinder
+  | SimpleResErrUnsupportedSkolem !UniqueId !TyBinder
   deriving stock (Eq, Show)
 
 instance Exception SimpleResErr
@@ -112,8 +112,8 @@ resolveVarM v = do
           Just j -> do
             w <- case j of
               ElemNode x -> local (\re -> re { rePath = ILS.insert v (rePath re) }) (resolveNodeM x)
-              ElemMeta mtyv -> throwError (SimpleResErrUnsolvedMeta v mtyv)
-              ElemSkolem tyv -> throwError (SimpleResErrUnsupportedSkolem v tyv)
+              ElemMeta tyb -> throwError (SimpleResErrUnsolvedMeta v tyb)
+              ElemSkolem tyb -> throwError (SimpleResErrUnsupportedSkolem v tyb)
             modify' (ILM.insert v w)
             pure w
 
@@ -136,7 +136,7 @@ newtype ResIndex = ResIndex { unResIndex :: Int }
 
 data ComplexResSt g = ComplexResSt
   { crsCache :: !(IntLikeMap UniqueId (BoundTy g ResIndex, Set ResIndex))
-  , crsVars :: !(Seq (Maybe TyVar))
+  , crsVars :: !(Seq TyBinder)
   }
 
 newtype ComplexResM g a = ComplexResM { unComplexResM :: ReaderT (ResEnv g) (StateT (ComplexResSt g) (Except ComplexResErr)) a }
@@ -145,11 +145,11 @@ newtype ComplexResM g a = ComplexResM { unComplexResM :: ReaderT (ResEnv g) (Sta
 runComplexResM :: ComplexResM g a -> Graph g -> Either ComplexResErr a
 runComplexResM m gr = fmap fst (runExcept (runStateT (runReaderT (unComplexResM m) (ResEnv gr ILS.empty)) (ComplexResSt ILM.empty Empty)))
 
-newVarM :: Maybe TyVar -> ComplexResM g (BoundTy g ResIndex, Set ResIndex)
-newVarM mtyv = do
+newVarM :: TyBinder -> ComplexResM g (BoundTy g ResIndex, Set ResIndex)
+newVarM tyb = do
   ix <- state $ \st ->
     let ix = ResIndex (Seq.length (crsVars st))
-        st' = st { crsVars = crsVars st :|> mtyv }
+        st' = st { crsVars = crsVars st :|> tyb }
       in (ix, st')
   pure (BoundTy (BoundTyVarF ix), Set.singleton ix)
 
@@ -167,8 +167,8 @@ resolveGenVarM v = do
           Just j -> do
             p <- case j of
               ElemNode x -> local (\re -> re { rePath = ILS.insert v (rePath re) }) (resolveGenNodeM x)
-              ElemMeta mtyv -> newVarM mtyv
-              ElemSkolem tyv -> newVarM (Just tyv)
+              ElemMeta tyb -> newVarM tyb
+              ElemSkolem tyb -> newVarM tyb
             modify' (\st -> st { crsCache = ILM.insert v p (crsCache st) })
             pure p
 
@@ -184,7 +184,7 @@ reindexTy f = go where
     BoundTyVarF i -> BoundTyVarF (f i)
     BoundTyEmbedF gbt -> BoundTyEmbedF (fmap go gbt)
 
-abstractTyM :: Traversable g => BoundTy g ResIndex -> Set ResIndex -> ComplexResM g (GenQuant g)
+abstractTyM :: Traversable g => BoundTy g ResIndex -> Set ResIndex -> ComplexResM g (PolyTy g)
 abstractTyM bt is =
   let failIndex i = error ("Internal error: missing index " ++ show i)
   in if Set.null is
@@ -193,7 +193,7 @@ abstractTyM bt is =
       let renaming = ILM.fromList (zip (Set.toAscList is) (fmap Index [0 ..]))
           finalBt = reindexTy (\i -> fromMaybe (failIndex i) (ILM.lookup i renaming)) bt
       vars <- gets crsVars
-      let finalVars = Seq.foldlWithIndex (\acc j mtyv -> if ILM.member (ResIndex j) renaming then acc :|> mtyv else acc) Empty vars
+      let finalVars = Seq.foldlWithIndex (\acc j tyb -> if ILM.member (ResIndex j) renaming then acc :|> tyb else acc) Empty vars
       pure $! QuantForAll (ForAll finalVars finalBt)
 
 resolveTmM :: (Bitraversable h, Traversable g) => SpecInit h g -> ComplexResM g (SpecTm h g (BoundTy g ResIndex) ResIndex, Set ResIndex)
@@ -218,7 +218,7 @@ abstractTmM h is = error "TODO"
   --     let finalVars = Seq.foldlWithIndex (\acc j mtyv -> if ILM.member (ResIndex j) renaming then acc :|> mtyv else acc) Empty vars
   --     pure $! QuantForAll (ForAll finalVars finalH)
 
-resolveGenVar :: Traversable g => UniqueId -> Graph g -> Either ComplexResErr (GenQuant g)
+resolveGenVar :: Traversable g => UniqueId -> Graph g -> Either ComplexResErr (PolyTy g)
 resolveGenVar = runComplexResM . (resolveGenVarM >=> uncurry abstractTyM)
 
 resolveTm :: (Bitraversable h, Traversable g) => SpecInit h g -> Graph g -> Either ComplexResErr (SpecFinal h g)
@@ -227,8 +227,8 @@ resolveTm = runComplexResM . (resolveTmM >=> uncurry abstractTmM)
 weakenElem :: Elem g -> PreElem g
 weakenElem = \case
   ElemNode g -> PreElemNode g
-  ElemMeta mtyv -> PreElemMeta mtyv
-  ElemSkolem tyv -> PreElemSkolem tyv
+  ElemMeta tyb -> PreElemMeta tyb
+  ElemSkolem tyb -> PreElemSkolem tyb
 
 weaken :: Graph g -> PreGraph g
 weaken = UP.fromList . fmap (second weakenElem) . toList

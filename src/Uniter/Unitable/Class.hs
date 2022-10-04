@@ -5,15 +5,15 @@ module Uniter.Unitable.Class
   ) where
 
 import Data.Functor.Foldable (Base, Recursive (..))
-import Uniter.Core (TmVar, TyVar, UniqueId, dummySpecTm)
-import Uniter.Reunitable.Monad (ReuniterM, addBaseTy, bindTmVar, constrainEq, freshMetaVar, resolveTmVar)
+import Uniter.Core (TmVar, TyBinder, UniqueId, dummySpecTm)
+import Uniter.Reunitable.Monad (ReuniterM, addNodeTy, bindTmVar, constrainEq, freshMetaVar, resolveTmVar)
 
 class (Traversable g, Monad m) => MonadUniter g m | m -> g where
   -- | Allocate an ID for the given base type.
-  uniterAddBaseTy :: g UniqueId -> m UniqueId
+  uniterAddNodeTy :: g UniqueId -> m UniqueId
 
   -- | Allocate a fresh ID.
-  uniterFreshVar :: Maybe TyVar -> m UniqueId
+  uniterFreshVar :: TyBinder -> m UniqueId
 
   -- | Emit equality constraints on two IDs.
   uniterConstrainEq :: UniqueId -> UniqueId -> m UniqueId
@@ -25,7 +25,7 @@ class (Traversable g, Monad m) => MonadUniter g m | m -> g where
   uniterResolveTmVar :: TmVar -> m UniqueId
 
 instance Traversable g => MonadUniter g (ReuniterM g) where
-  uniterAddBaseTy = addBaseTy
+  uniterAddNodeTy = addNodeTy
   uniterFreshVar = freshMetaVar
   uniterConstrainEq = constrainEq
   uniterBindTmVar = bindTmVar

@@ -5,30 +5,22 @@
 
 packages:
 - completed:
-    name: int-like
-    version: 0.1.0
-    git: git@github.com:ejconlon/int-like.git
+    hackage: int-like-0.1.1@sha256:07edfd99581f97b0384611660f9453d34bcdf17e19a4907d195d288e3dcee735,3093
     pantry-tree:
-      size: 1134
-      sha256: eb8c6164e68d71ca83757cf63b79015847341c2165c34ba412eccffabd973d7f
-    commit: c277da03d6e0b61280f67169c4dc6219a2578faa
+      size: 556
+      sha256: a81c294faf72ab621b70cada1bd53c53eb1c36fe9e2ab18d3354192c0824a16e
   original:
-    git: git@github.com:ejconlon/int-like.git
-    commit: c277da03d6e0b61280f67169c4dc6219a2578faa
+    hackage: int-like-0.1.1
 - completed:
-    name: prop-unit
-    version: 0.1.0
-    git: git@github.com:ejconlon/prop-unit.git
+    hackage: prop-unit-0.1.0@sha256:19a8942d0aa89ada2fd3944d7a63a63cbaf3909b6d6e43977cdc234e223dd906,2922
     pantry-tree:
-      size: 840
-      sha256: 1194fa87c2c23896080a54018f682b6e4a6094fc2156822179380a3e51fc9c92
-    commit: d562ed5c39b4b87b4c226126f249f0e97d89c2dd
+      size: 309
+      sha256: 0e7efcd2d185adc28d04a0ca399b1b623da123b390316e852d83d740b1f00126
   original:
-    git: git@github.com:ejconlon/prop-unit.git
-    commit: d562ed5c39b4b87b4c226126f249f0e97d89c2dd
+    hackage: prop-unit-0.1.0
 snapshots:
 - completed:
-    size: 619164
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/19/18.yaml
-    sha256: 65b9809265860e085b4f61d4eb00d5d73e41190693620385a69cc9d9df7a901d
-  original: lts-19.18
+    size: 619403
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/19/27.yaml
+    sha256: 1ecad1f0bd2c27de88dbff6572446cfdf647c615d58a7e2e2085c6b7dfc04176
+  original: lts-19.27

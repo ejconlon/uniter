@@ -1,31 +1,29 @@
 {-# LANGUAGE UndecidableInstances #-}
 
+-- | Core definitions
 module Uniter.Core
   ( UniqueId (..)
   , Node
-  , Event (..)
   , Index (..)
   , Level (..)
   , TyVar (..)
   , TmVar (..)
   , Var (..)
+  , TyBinder (..)
+  -- , TyBinding (..)
+  -- , mkTyBinding
+  , Event (..)
   , ForAll (..)
   , Quant (..)
-  , Pair (..)
-  , pairToTuple
-  , tupleToPair
   , BoundTy (..)
   , BoundTyF (..)
-  , recBoundTy
+  , monoToBoundTy
   , varBoundTy
   , embedBoundTy
   , bareQuantTy
   , forAllQuantTy
-  , SrcQuant
-  , recSrcQuant
-  , GenQuant
-  , recGenQuant
-  , demoteQuant
+  , PolyTy
+  , monoToPolyTy
   , SpecTm (..)
   , SpecTmF (..)
   , recSpecTm
@@ -37,11 +35,10 @@ module Uniter.Core
   , dummySpecTm
   ) where
 
-import Data.Bifunctor (Bifunctor (..))
 import Data.Functor.Foldable (Base, Corecursive (..), Recursive (..))
 import Data.Kind (Type)
 import Data.Sequence (Seq)
-import Data.String (IsString)
+import Data.String (IsString (..))
 import Data.Text (Text)
 
 -- | A unique ID for generating distinct synthetic vars
@@ -52,18 +49,6 @@ newtype UniqueId = UniqueId { unUniqueId :: Int }
 
 -- | A 'Node' is a structure with all the holes filled with 'UniqueId's.
 type Node g = g UniqueId
-
--- | An 'Event' can be processed
-data Event g =
-    EventAddNode !(Node g) !UniqueId
-  | EventConstrainEq !UniqueId !UniqueId !UniqueId
-  | EventNewMetaVar !(Maybe TyVar) !UniqueId
-  | EventNewSkolemVar !TyVar !UniqueId
-  -- | EventNewPolyVar !(Seq UniqueId) !UniqueId
-
-deriving instance Eq (Node g) => Eq (Event g)
-deriving instance Ord (Node g) => Ord (Event g)
-deriving instance Show (Node g) => Show (Event g)
 
 -- | DeBruijn index
 -- Num instance is for literal conversion
@@ -95,6 +80,35 @@ data Var =
   | VarTm !TmVar
   deriving stock (Eq, Ord, Show)
 
+-- | An optional binder for a type
+-- 'Nothing' means it cannot bind any vars, but still shifts indices.
+newtype TyBinder = TyBinder { unTyBinder :: Maybe TyVar }
+  deriving stock (Show)
+  deriving newtype (Eq, Ord)
+
+instance IsString TyBinder where
+  fromString = TyBinder . Just . fromString
+
+-- data TyBinding a = TyBinding
+--   { tbVar :: !TyVar
+--   , tbVal :: !a
+--   } deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
+
+-- mkTyBinding :: Applicative m => TyBinder -> m a -> m (Maybe (TyBinding a))
+-- mkTyBinding tyb act = maybe (pure Nothing) (\tyv -> fmap (Just . TyBinding tyv) act) (unTyBinder tyb)
+
+-- | An 'Event' can be processed to yield solution graphs
+data Event g =
+    EventAddNode !(Node g) !UniqueId
+  | EventConstrainEq !UniqueId !UniqueId !UniqueId
+  | EventNewMetaVar !TyBinder !UniqueId
+  | EventNewSkolemVar !TyBinder !UniqueId
+  -- | EventNewPolyVar !(Seq UniqueId) !UniqueId
+
+deriving instance Eq (Node g) => Eq (Event g)
+deriving instance Ord (Node g) => Ord (Event g)
+deriving instance Show (Node g) => Show (Event g)
+
 -- | Something with universally quantified type variables
 data ForAll b a = ForAll
   { forAllBinders :: !(Seq b)
@@ -107,26 +121,13 @@ data Quant (b :: Type) (a :: Type) =
   | QuantForAll !(ForAll b a)
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
 
--- | A strict tuple
-data Pair k v = Pair
-  { pairKey :: !k
-  , pairVal :: !v
-  } deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
-
-instance Bifunctor Pair where
-  bimap f g (Pair k v) = Pair (f k) (g v)
-
-pairToTuple :: Pair k v -> (k, v)
-pairToTuple (Pair k v) = (k, v)
-
-tupleToPair :: (k, v) -> Pair k v
-tupleToPair (k, v) = Pair k v
-
 -- | A "bound" type - includes all the given type constructors plus one
 -- for type variables.
 data BoundTyF (g :: Type -> Type) (i :: Type) (r :: Type) =
     BoundTyVarF !i
+    -- ^ A type variable
   | BoundTyEmbedF !(g r)
+    -- ^ Just a normal type embedded here
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
 
 newtype BoundTy (g :: Type -> Type) (i :: Type) = BoundTy { unBoundTy :: BoundTyF g i (BoundTy g i) }
@@ -138,8 +139,8 @@ deriving stock instance (Show i, Show (g (BoundTy g i))) => (Show (BoundTy g i))
 varBoundTy :: i -> BoundTy g i
 varBoundTy = BoundTy . BoundTyVarF
 
-recBoundTy :: (Recursive u, Base u ~ g) => u -> BoundTy g i
-recBoundTy = cata embedBoundTy
+monoToBoundTy :: (Recursive u, Base u ~ g) => u -> BoundTy g i
+monoToBoundTy = cata embedBoundTy
 
 embedBoundTy :: g (BoundTy g i) -> BoundTy g i
 embedBoundTy = BoundTy . BoundTyEmbedF
@@ -153,33 +154,23 @@ instance Functor g => Corecursive (BoundTy g i) where
   embed = BoundTy
 
 bareQuantTy :: (Recursive u, Base u ~ g) => u -> Quant b (BoundTy g i)
-bareQuantTy = QuantBare . recBoundTy
+bareQuantTy = QuantBare . monoToBoundTy
 
 forAllQuantTy :: Seq b -> BoundTy i g -> Quant b (BoundTy i g)
 forAllQuantTy vs bt = QuantForAll (ForAll vs bt)
 
--- | A type signature for a term variable in the environment
-type SrcQuant g = Quant TyVar (BoundTy g Index)
-
-recSrcQuant :: (Recursive u, Base u ~ g) => u -> SrcQuant g
-recSrcQuant = QuantBare . recBoundTy
-
 -- | A polytype
-type GenQuant g = Quant (Maybe TyVar) (BoundTy g Index)
+type PolyTy g = Quant TyBinder (BoundTy g Index)
 
-recGenQuant :: (Recursive u, Base u ~ g) => u -> GenQuant g
-recGenQuant = QuantBare . recBoundTy
-
--- | Convert a SrcQuant into a GenQuant (a weaker type; we already have all the optional info)
-demoteQuant :: SrcQuant g -> GenQuant g
-demoteQuant = \case
-  QuantBare bt -> QuantBare bt
-  QuantForAll (ForAll xs bt) -> QuantForAll (ForAll (fmap Just xs) bt)
+monoToPolyTy :: (Recursive u, Base u ~ g) => u -> PolyTy g
+monoToPolyTy = QuantBare . monoToBoundTy
 
 -- | The base functor for 'SpecTm'
 data SpecTmF (h :: Type -> Type -> Type) (g :: Type -> Type) (a :: Type) (i :: Type) (r :: Type) =
-    SpecTmSpecF !(GenQuant g) !(Seq i) !r
+    SpecTmSpecF !(PolyTy g) !(Seq i) !r
+    -- ^ A specialized term - (polytype, instantiations for all vars, term)
   | SpecTmEmbedF !(h a r)
+    -- ^ Just a normal term embedded here
   deriving stock (Functor, Foldable, Traversable)
 
 deriving stock instance (Eq a, Eq i, Eq r, Eq (g (BoundTy g Index)), Eq (h a r)) => Eq (SpecTmF h g a i r)
@@ -218,14 +209,14 @@ embedSpecTm :: h a (SpecTm h g a i) -> SpecTm h g a i
 embedSpecTm = SpecTm . SpecTmEmbedF
 
 -- | Specializes a term.
-bindSpecTm :: GenQuant g -> Seq i -> SpecTm h g a i -> SpecTm h g a i
+bindSpecTm :: PolyTy g -> Seq i -> SpecTm h g a i -> SpecTm h g a i
 bindSpecTm a is s = SpecTm (SpecTmSpecF a is s)
 
 -- | The initial reconstructed term - unsolved annotations and specializations
 type SpecInit h g = SpecTm h g UniqueId UniqueId
 
 -- | The final reconstructed term - annotated with polytypes and specializing with bound tys
-type SpecFinal h g = Quant (Maybe TyVar) (SpecTm h g (GenQuant g) (BoundTy g Index))
+type SpecFinal h g = Quant TyBinder (SpecTm h g (PolyTy g) (BoundTy g Index))
 
 data DummyAnnTm a r = DummyAnnTm
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)

@@ -19,9 +19,11 @@ import Control.Monad.Catch (MonadThrow (..))
 import Data.Functor.Foldable.TH (makeBaseFunctor)
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
-import Uniter (Alignable (..), MonadUniter (..), TmVar, UnalignableErr (..), Unitable (..), UniteSuccess (..),
-               uniteResult)
+import Uniter.Align (Alignable (..), UnalignableErr (..))
+import Uniter.Core (TmVar, TyBinder (..))
 import Uniter.Render (writeGraphDot, writePreGraphDot)
+import Uniter.Unitable.Class (MonadUniter (..), Unitable (..))
+import Uniter.Unitable.Driver (UniteSuccess (..), uniteResult)
 
 -- | A simple expression language with constants, vars, lets, tuples, and projections.
 data Exp =
@@ -62,7 +64,7 @@ instance Unitable ExpF TyF where
   unite = \case
     ExpConstF ->
       -- constants have constant type
-      uniterAddBaseTy TyConstF
+      uniterAddNodeTy TyConstF
     ExpUseBindF n -> do
       -- vars require we lookup the binding, throwing if it's not there
       uniterResolveTmVar n
@@ -76,14 +78,14 @@ instance Unitable ExpF TyF where
       x <- mx
       y <- my
       -- and tuple them together!
-      uniterAddBaseTy (TyPairF x y)
+      uniterAddNodeTy (TyPairF x y)
     ExpFirstF mx -> do
       -- find the type of the argument
       x <- mx
       -- and ensure it unifies with a tuple type
-      v <- uniterFreshVar Nothing
-      w <- uniterFreshVar Nothing
-      y <- uniterAddBaseTy (TyPairF v w)
+      v <- uniterFreshVar (TyBinder Nothing)
+      w <- uniterFreshVar (TyBinder Nothing)
+      y <- uniterAddNodeTy (TyPairF v w)
       _ <- uniterConstrainEq x y
       -- fst returns the type of the first element of the pair
       pure v
@@ -91,9 +93,9 @@ instance Unitable ExpF TyF where
       -- just like first, find the type of the argument
       x <- mx
       -- and again ensure it unifies with a tuple type
-      v <- uniterFreshVar Nothing
-      w <- uniterFreshVar Nothing
-      y <- uniterAddBaseTy (TyPairF v w)
+      v <- uniterFreshVar (TyBinder Nothing)
+      w <- uniterFreshVar (TyBinder Nothing)
+      y <- uniterAddNodeTy (TyPairF v w)
       _ <- uniterConstrainEq x y
       -- BUT return something different here:
       -- snd returns the type of the second element of the pair

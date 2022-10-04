@@ -8,19 +8,23 @@ import Data.Bitraversable (Bitraversable)
 import Data.Foldable (toList)
 import Data.Functor.Foldable (Base, Recursive (..))
 import Data.Kind (Type)
-import Uniter.Core (Index, Node, SpecInit, SpecTm, SrcQuant, TmVar, TyVar, UniqueId)
-import Uniter.Reunitable.Monad (ReuniterM, addBaseTy, addSrcQuant, bindTmVar, constrainEq, freshMetaVar, resolveTmVar)
+import Uniter.Core (BoundTy, Index, Node, SpecInit, SpecTm, TmVar, TyBinder (..), TyVar, UniqueId)
+import Uniter.Reunitable.Monad (ReuniterM, addBoundTy, addMonoTy, addNodeTy, bindTmVar, constrainEq, freshMetaVar,
+                                resolveTmVar)
 
 -- | (There's really only one instance of this but we need to encapsulate the monad.)
 class (Traversable g, Monad m) => MonadReuniter (g :: Type -> Type) (m :: Type -> Type) | m -> g where
   -- | Allocate an ID for the given base type.
-  reuniterAddBaseTy :: Node g -> m UniqueId
+  reuniterAddNodeTy :: Node g -> m UniqueId
 
-  -- | Allocate an ID for the given polytype (recursing bottom-up on individual nodes and resolving vars as needed)
-  reuniterAddSrcQuant :: SrcQuant g -> m UniqueId
+  -- | Allocates and ID for the given bound type.
+  reuniterAddBoundTy :: BoundTy g TyVar -> m UniqueId
+
+  -- | Allocates and ID for the given mono type.
+  reuniterAddMonoTy :: (Base u ~ g, Recursive u) => u -> m UniqueId
 
   -- | Allocate a fresh ID.
-  reuniterFreshVar :: Maybe TyVar -> m UniqueId
+  reuniterFreshVar :: TyBinder -> m UniqueId
 
   -- | Emit equality constraints on two IDs.
   reuniterConstrainEq :: UniqueId -> UniqueId -> m UniqueId
@@ -42,11 +46,12 @@ class (Traversable g, Monad m) => MonadReuniter (g :: Type -> Type) (m :: Type -
 
   -- | Bind the type of the given term variable to a fresh metavar in the given scope.
   reuniterBindFreshTmVar :: TmVar -> m a -> m a
-  reuniterBindFreshTmVar tmv m = reuniterFreshVar Nothing >>= \b -> reuniterBindTmVar tmv b m
+  reuniterBindFreshTmVar tmv m = reuniterFreshVar (TyBinder Nothing) >>= \b -> reuniterBindTmVar tmv b m
 
 instance Traversable g => MonadReuniter g (ReuniterM g) where
-  reuniterAddBaseTy = addBaseTy
-  reuniterAddSrcQuant = addSrcQuant
+  reuniterAddNodeTy = addNodeTy
+  reuniterAddBoundTy = addBoundTy
+  reuniterAddMonoTy = addMonoTy
   reuniterFreshVar = freshMetaVar
   reuniterConstrainEq = constrainEq
   reuniterResolveTmVar = resolveTmVar

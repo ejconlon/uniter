@@ -32,7 +32,7 @@ import IntLike.Map (IntLikeMap)
 import qualified IntLike.Map as ILM
 import Lens.Micro (lens)
 import Uniter.Align (Alignable (..))
-import Uniter.Core (Event (..), Node, SrcQuant, TmVar, TyVar, UniqueId (..))
+import Uniter.Core (Event (..), Node, PolyTy, TmVar, TyBinder (..), UniqueId (..))
 import Uniter.Graph (Elem (..), Graph (..), elemTraversal)
 import Uniter.Reunitable.Monad (ReuniterErr, ReuniterM, ReuniterState (..), newReuniterEnv, newReuniterState,
                                 runReuniterM)
@@ -46,7 +46,7 @@ data ProcessErr e g =
     ProcessErrDuplicate !UniqueId
   | ProcessErrMissing !UniqueId
   | ProcessErrReuniter !ReuniterErr
-  | ProcessErrSkolemAlign !TyVar !(Elem g)
+  | ProcessErrSkolemAlign !TyBinder !(Elem g)
   | ProcessErrEmbed !e
   deriving stock (Typeable)
 
@@ -136,14 +136,14 @@ runAlignM al b = fmap (\((a, w), s) -> (a, s, w)) (runExcept (runStateT (runWrit
 alignElems :: Alignable e g => Elem g -> Elem g -> AlignM e g (Elem g)
 alignElems da db =
   case (da, db) of
-    (ElemMeta mtya, ElemMeta mtyb) -> pure (ElemMeta (mtya <|> mtyb))
+    (ElemMeta (TyBinder tya), ElemMeta (TyBinder tyb)) -> pure (ElemMeta (TyBinder (tya <|> tyb)))
     (ElemMeta _, _) -> pure db
     (_, ElemMeta _) -> pure da
     -- It is always a domain error to align skolem vars, because
     -- they only align with themselves! The framework will not call this unless
     -- it's aligning two distinct vars.
-    (ElemSkolem tyv, _) -> throwError (ProcessErrSkolemAlign tyv db)
-    (_, ElemSkolem tyv) -> throwError (ProcessErrSkolemAlign tyv da)
+    (ElemSkolem tya, _) -> throwError (ProcessErrSkolemAlign tya db)
+    (_, ElemSkolem tyb) -> throwError (ProcessErrSkolemAlign tyb da)
     (ElemNode na, ElemNode nb) -> do
       case align na nb of
         Left e -> throwError (ProcessErrEmbed e)
@@ -187,7 +187,7 @@ constrainP :: Alignable e g => Item -> ProcessM e g ()
 constrainP it = do
   -- NOTE contract is that the root will not have been referenced before,
   -- so we have to add it to the graph when we see it
-  defineP (ElemMeta Nothing) (itemRoot it)
+  defineP (ElemMeta (TyBinder Nothing)) (itemRoot it)
   constrainRecP (Seq.singleton it)
 
 constrainRecP :: Alignable e g => Seq Item -> ProcessM e g ()
@@ -196,7 +196,7 @@ constrainRecP = \case
     it :<| rest -> do
       newIts <- mergeP it
       -- see note in emitP
-      for_ newIts $ \newIt -> defineP (ElemMeta Nothing) (itemRoot newIt)
+      for_ newIts $ \newIt -> defineP (ElemMeta (TyBinder Nothing)) (itemRoot newIt)
       constrainRecP (newIts <> rest)
 
 defineP :: Elem g -> UniqueId -> ProcessM e g ()
@@ -210,10 +210,10 @@ handleEvent :: Alignable e g => Event g -> ProcessM e g ()
 handleEvent = \case
   EventAddNode n k -> defineP (ElemNode n) k
   EventConstrainEq i j k -> constrainP (Item (Duo i j) k)
-  EventNewMetaVar mtyv k -> defineP (ElemMeta mtyv) k
-  EventNewSkolemVar tyv k -> defineP (ElemSkolem tyv) k
+  EventNewMetaVar tyb k -> defineP (ElemMeta tyb) k
+  EventNewSkolemVar tyb k -> defineP (ElemSkolem tyb) k
 
-embedReuniterM :: Alignable e g => Map TmVar (SrcQuant g) -> ReuniterM g a -> ProcessM e g a
+embedReuniterM :: Alignable e g => Map TmVar (PolyTy g) -> ReuniterM g a -> ProcessM e g a
 embedReuniterM fm m = do
   q <- gets psUnique
   let re = newReuniterEnv fm
