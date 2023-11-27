@@ -26,17 +26,17 @@ class Traversable f => Alignable e f | f -> e where
   alignWith :: (These a b -> c) -> f a -> f b -> Either e (f c)
   alignWith f fa fb = fmap (fmap f) (align fa fb)
 
-  -- |
-  alignAll :: Foldable t => (These z a -> z) -> t (f a) -> Either (Maybe e) (f z)
-  alignAll f = go (Left Nothing) . toList where
-    go acc = \case
+  -- | 'align' several things in one go
+  alignAll :: Foldable t => (These z a -> z) -> t (f a) -> Either (Maybe (Int, e)) (f z)
+  alignAll f = go 0 (Left Nothing) . toList where
+    go !i acc = \case
       [] -> acc
       fa:fas ->
         case acc of
           Right gz ->
             case alignWith f gz fa of
-              Left e -> Left (Just e)
-              Right pza -> go (Right pza) fas
-          _ -> go (Right (fmap (f . That) fa)) fas
+              Left e -> Left (Just (i, e))
+              Right pza -> go (i + 1) (Right pza) fas
+          _ -> go (i + 1) (Right (fmap (f . That) fa)) fas
 
   {-# MINIMAL alignWith | align #-}

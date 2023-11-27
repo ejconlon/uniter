@@ -1,3 +1,4 @@
+-- | (Import this qualified)
 module Uniter.OrderedMap
   ( OrderedMap
   , empty

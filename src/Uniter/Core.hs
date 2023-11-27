@@ -10,8 +10,6 @@ module Uniter.Core
   , TmVar (..)
   , Var (..)
   , TyBinder (..)
-  -- , TyBinding (..)
-  -- , mkTyBinding
   , Event (..)
   , ForAll (..)
   , Quant (..)
@@ -40,6 +38,9 @@ import Data.Kind (Type)
 import Data.Sequence (Seq)
 import Data.String (IsString (..))
 import Data.Text (Text)
+import Data.Bifunctor (Bifunctor (..))
+import Data.Bifoldable (Bifoldable (..))
+import Data.Bitraversable (Bitraversable (..))
 
 -- | A unique ID for generating distinct synthetic vars
 -- Num instance is for literal conversion.
@@ -48,7 +49,7 @@ newtype UniqueId = UniqueId { unUniqueId :: Int }
   deriving newtype (Eq, Ord, Enum, Num)
 
 -- | A 'Node' is a structure with all the holes filled with 'UniqueId's.
-type Node g = g UniqueId
+type Node (g :: Type -> Type) = g UniqueId
 
 -- | DeBruijn index
 -- Num instance is for literal conversion
@@ -75,6 +76,8 @@ newtype TmVar = TmVar { unTmVar :: Text }
   deriving newtype (Eq, Ord, IsString)
 
 -- | A term or type variable (or binder)
+-- We need to group these together so de Bruijn indexing works
+-- after we insert type lambdas.
 data Var =
     VarTy !TyVar
   | VarTm !TmVar
@@ -89,16 +92,8 @@ newtype TyBinder = TyBinder { unTyBinder :: Maybe TyVar }
 instance IsString TyBinder where
   fromString = TyBinder . Just . fromString
 
--- data TyBinding a = TyBinding
---   { tbVar :: !TyVar
---   , tbVal :: !a
---   } deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
-
--- mkTyBinding :: Applicative m => TyBinder -> m a -> m (Maybe (TyBinding a))
--- mkTyBinding tyb act = maybe (pure Nothing) (\tyv -> fmap (Just . TyBinding tyv) act) (unTyBinder tyb)
-
 -- | An 'Event' can be processed to yield solution graphs
-data Event g =
+data Event (g :: Type -> Type) =
     EventAddNode !(Node g) !UniqueId
   | EventConstrainEq !UniqueId !UniqueId !UniqueId
   | EventNewMetaVar !TyBinder !UniqueId
@@ -110,8 +105,8 @@ deriving instance Ord (Node g) => Ord (Event g)
 deriving instance Show (Node g) => Show (Event g)
 
 -- | Something with universally quantified type variables
-data ForAll b a = ForAll
-  { forAllBinders :: !(Seq b)
+data ForAll (b :: Type) (a :: Type) = ForAll
+  { forAllBinders :: !(Seq b) -- TODO NESeq
   , forAllBody :: !a
   } deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
 
@@ -121,7 +116,7 @@ data Quant (b :: Type) (a :: Type) =
   | QuantForAll !(ForAll b a)
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
 
--- | A "bound" type - includes all the given type constructors plus one
+-- | A "bound" type functor - includes all the given type constructors plus one
 -- for type variables.
 data BoundTyF (g :: Type -> Type) (i :: Type) (r :: Type) =
     BoundTyVarF !i
@@ -130,18 +125,22 @@ data BoundTyF (g :: Type -> Type) (i :: Type) (r :: Type) =
     -- ^ Just a normal type embedded here
   deriving stock (Eq, Ord, Show, Functor, Foldable, Traversable)
 
+-- | A "bound" type - knot tie of 'BoundTyF'
 newtype BoundTy (g :: Type -> Type) (i :: Type) = BoundTy { unBoundTy :: BoundTyF g i (BoundTy g i) }
 
 deriving stock instance (Eq i, Eq (g (BoundTy g i))) => (Eq (BoundTy g i))
 deriving stock instance (Ord i, Ord (g (BoundTy g i))) => (Ord (BoundTy g i))
 deriving stock instance (Show i, Show (g (BoundTy g i))) => (Show (BoundTy g i))
 
+-- | Make a bound type representing a type var
 varBoundTy :: i -> BoundTy g i
 varBoundTy = BoundTy . BoundTyVarF
 
+-- | Make a bound type from a monotype
 monoToBoundTy :: (Recursive u, Base u ~ g) => u -> BoundTy g i
 monoToBoundTy = cata embedBoundTy
 
+-- | Make a bound type from pieces of a monotype
 embedBoundTy :: g (BoundTy g i) -> BoundTy g i
 embedBoundTy = BoundTy . BoundTyEmbedF
 
@@ -191,6 +190,24 @@ newtype SpecTm (h :: Type -> Type -> Type) (g :: Type -> Type) (a :: Type) (i ::
 deriving stock instance (Eq a, Eq i, Eq (g (BoundTy g Index)), Eq (h a (SpecTm h g a i))) => Eq (SpecTm h g a i)
 deriving stock instance (Ord a, Ord i, Ord (g (BoundTy g Index)), Ord (h a (SpecTm h g a i))) => Ord (SpecTm h g a i)
 deriving stock instance (Show a, Show i, Show (g (BoundTy g Index)), Show (h a (SpecTm h g a i))) => Show (SpecTm h g a i)
+
+instance Bifunctor h => Bifunctor (SpecTm h g) where
+  bimap f g = go where
+    go (SpecTm sf) = SpecTm $ case sf of
+      SpecTmSpecF qu is body -> SpecTmSpecF qu (fmap g is) (go body)
+      SpecTmEmbedF fbody -> SpecTmEmbedF (bimap f go fbody)
+
+instance Bifoldable h => Bifoldable (SpecTm h g) where
+  bifoldr f g z0 s0 = go s0 z0 where
+    go (SpecTm sf) z = case sf of
+      SpecTmSpecF _ is body -> foldr g (go body z) is
+      SpecTmEmbedF fbody -> bifoldr f go z fbody
+
+instance Bitraversable h => Bitraversable (SpecTm h g) where
+  bitraverse f g = go where
+    go (SpecTm sf) = case sf of
+      SpecTmSpecF qu is body -> (\is' body' -> SpecTm (SpecTmSpecF qu is' body')) <$> traverse g is <*> go body
+      SpecTmEmbedF fbody -> fmap (SpecTm . SpecTmEmbedF) (bitraverse f go fbody)
 
 type instance Base (SpecTm h g a i) = SpecTmF h g a i
 

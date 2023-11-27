@@ -22,6 +22,7 @@ import Control.Monad.State.Strict (MonadState (..), State, StateT, gets, modify'
 import Control.Monad.Writer.Strict (MonadWriter, WriterT, runWriterT, tell)
 import Data.Foldable (for_)
 import Data.Functor (($>))
+import Data.Kind (Type)
 import Data.Map.Strict (Map)
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
@@ -42,7 +43,7 @@ import Uniter.UnionMap (UnionEntry (..), UnionMap (..), UnionMapAddVal (..), Uni
 
 type RebindMap = IntLikeMap UniqueId UniqueId
 
-data ProcessErr e g =
+data ProcessErr (e :: Type) (g :: Type -> Type) =
     ProcessErrDuplicate !UniqueId
   | ProcessErrMissing !UniqueId
   | ProcessErrReuniter !ReuniterErr
@@ -56,7 +57,7 @@ deriving stock instance (Show e, Show (Node g)) => Show (ProcessErr e g)
 
 instance (Show e, Typeable e, Show (Node g), Typeable g) => Exception (ProcessErr e g)
 
-data ProcessState g = ProcessState
+data ProcessState (g :: Type -> Type) = ProcessState
   { psUnique :: !UniqueId
   , psUnionMap :: !(UnionMap UniqueId (Elem g))
   }

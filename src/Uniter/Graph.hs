@@ -1,5 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 
+-- | (Import this qualified)
 module Uniter.Graph
   ( Elem (..)
   , elemTraversal
@@ -27,6 +28,7 @@ import Control.Monad.Trans.Writer.Strict (WriterT (..))
 import Data.Bifunctor (Bifunctor (..), second)
 import Data.Bitraversable (Bitraversable (..))
 import Data.Functor.Foldable (Base, Corecursive (..))
+import Data.Kind (Type)
 import Data.Maybe (fromMaybe)
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
@@ -39,11 +41,11 @@ import qualified IntLike.Set as ILS
 import Lens.Micro (Traversal')
 import Prelude hiding (lookup)
 import Uniter.Core (BoundTy (..), BoundTyF (..), ForAll (..), Index (..), Node, PolyTy, Quant (..), SpecFinal, SpecInit,
-                    SpecTm (..), SpecTmF (..), TyBinder (..), UniqueId (..), embedBoundTy)
+                    SpecTm (..), TyBinder (..), UniqueId (..), embedBoundTy, SpecTmF (..))
 import Uniter.PreGraph (PreElem (..), PreGraph)
 import qualified Uniter.PreGraph as UP
 
-data Elem g =
+data Elem (g :: Type -> Type) =
     ElemNode !(Node g)
   | ElemMeta !TyBinder
   | ElemSkolem !TyBinder
@@ -58,7 +60,7 @@ elemTraversal f = \case
   ElemNode fb -> fmap ElemNode (traverse f fb)
   e -> pure e
 
-newtype Graph g = Graph { unGraph :: IntLikeMap UniqueId (Elem g) }
+newtype Graph (g :: Type -> Type) = Graph { unGraph :: IntLikeMap UniqueId (Elem g) }
 
 deriving newtype instance Eq (Node g) => Eq (Graph g)
 deriving stock instance Show (Node g) => Show (Graph g)
@@ -78,11 +80,19 @@ insert x y = Graph . ILM.insert x y . unGraph
 lookup :: UniqueId -> Graph g -> Maybe (Elem g)
 lookup x = ILM.lookup x . unGraph
 
+-- What follows are methods to pull terms and types out of the graph.
+-- Here this is called "resolution." There are two variants:
+-- 1. "simple" - just extracting (mono-)types
+-- 2. "complex" - extracting quantified/specialized/reconstructed terms and their polytypes
+
+-- When resolving, the graph is constant, and we maintain a scoped path
+-- to detect cycles.
 data ResEnv g = ResEnv
   { reGraph :: !(Graph g)
   , rePath :: !(IntLikeSet UniqueId)
   }
 
+-- | Resolution can go wrong in many ways...
 data SimpleResErr =
     SimpleResErrLoop !UniqueId
   | SimpleResErrNotFound !UniqueId
@@ -98,6 +108,7 @@ newtype SimpleResM g u a = SimpleResM { unSimpleResM :: ReaderT (ResEnv g) (Stat
 runSimpleResM :: SimpleResM g u a -> Graph g -> Either SimpleResErr a
 runSimpleResM m gr = runExcept (evalStateT (runReaderT (unSimpleResM m) (ResEnv gr ILS.empty)) ILM.empty)
 
+-- Resolve a type by metavar id.
 resolveVarM :: (Corecursive u, Base u ~ g, Traversable g) => UniqueId -> SimpleResM g u u
 resolveVarM v = do
   mw <- gets (ILM.lookup v)
@@ -117,12 +128,15 @@ resolveVarM v = do
             modify' (ILM.insert v w)
             pure w
 
+-- Resolve a type by node.
 resolveNodeM :: (Corecursive u, Base u ~ g, Traversable g) => Node g -> SimpleResM g u u
 resolveNodeM n = fmap embed (traverse resolveVarM n)
 
+-- | Resolve a type by metavar id.
 resolveVar :: (Corecursive u, Base u ~ g, Traversable g) => UniqueId -> Graph g -> Either SimpleResErr u
 resolveVar = runSimpleResM . resolveVarM
 
+-- | Resolution can go wrong in many ways...
 data ComplexResErr =
     ComplexResErrLoop !UniqueId
   | ComplexResErrNotFound !UniqueId
@@ -130,6 +144,7 @@ data ComplexResErr =
 
 instance Exception ComplexResErr
 
+-- de Bruijn index into the vars sequence
 newtype ResIndex = ResIndex { unResIndex :: Int }
   deriving stock (Show)
   deriving newtype (Eq, Ord)
@@ -172,6 +187,9 @@ resolveGenVarM v = do
             modify' (\st -> st { crsCache = ILM.insert v p (crsCache st) })
             pure p
 
+bitraverseWriter :: (Monoid w, Applicative m, Bitraversable h) => (x -> m (y, w)) -> (a -> m (b, w)) -> h x a -> m (h y b, w)
+bitraverseWriter f g hxa = runWriterT (bitraverse (WriterT . f) (WriterT . g) hxa)
+
 traverseWriter :: (Monoid w, Applicative m, Traversable g) => (a -> m (b, w)) -> g a -> m (g b, w)
 traverseWriter f ga = runWriterT (traverse (WriterT . f) ga)
 
@@ -184,51 +202,53 @@ reindexTy f = go where
     BoundTyVarF i -> BoundTyVarF (f i)
     BoundTyEmbedF gbt -> BoundTyEmbedF (fmap go gbt)
 
+failIndex :: Show i => i -> a
+failIndex i = error ("Internal error: missing index " ++ show i)
+
 abstractTyM :: Traversable g => BoundTy g ResIndex -> Set ResIndex -> ComplexResM g (PolyTy g)
 abstractTyM bt is =
-  let failIndex i = error ("Internal error: missing index " ++ show i)
-  in if Set.null is
-    then pure $! QuantBare (reindexTy failIndex bt)
+  if Set.null is
+    then pure (QuantBare (reindexTy failIndex bt))
     else do
       let renaming = ILM.fromList (zip (Set.toAscList is) (fmap Index [0 ..]))
           finalBt = reindexTy (\i -> fromMaybe (failIndex i) (ILM.lookup i renaming)) bt
       vars <- gets crsVars
       let finalVars = Seq.foldlWithIndex (\acc j tyb -> if ILM.member (ResIndex j) renaming then acc :|> tyb else acc) Empty vars
-      pure $! QuantForAll (ForAll finalVars finalBt)
+      pure (QuantForAll (ForAll finalVars finalBt))
 
-resolveTmM :: (Bitraversable h, Traversable g) => SpecInit h g -> ComplexResM g (SpecTm h g (BoundTy g ResIndex) ResIndex, Set ResIndex)
-resolveTmM = error "TODO" -- traverseWriter resolveGenVarM
+sealTy :: Traversable g => BoundTy g ResIndex -> Set ResIndex -> BoundTy g Index
+sealTy bt is =
+  let renaming = ILM.fromList (zip (Set.toAscList is) (fmap Index [0 ..]))
+  in reindexTy (\i -> fromMaybe (failIndex i) (ILM.lookup i renaming)) bt
 
-reindexTm :: (Bifunctor h, Functor g) => (i -> j) -> SpecTm h g (BoundTy g i) i -> SpecTm h g (BoundTy g j) j
-reindexTm f = goTm where
-  goTm (SpecTm st) = SpecTm $ case st of
-     SpecTmEmbedF gh -> SpecTmEmbedF (bimap goTy goTm gh)
-     SpecTmSpecF ann bts h -> SpecTmSpecF ann (fmap f bts) (goTm h)
-  goTy = reindexTy f
+resolveTmM :: (Bitraversable h, Traversable g) => SpecInit h g -> ComplexResM g (SpecTm h g (BoundTy g ResIndex) (BoundTy g ResIndex), Set ResIndex)
+resolveTmM = bitraverseWriter resolveGenVarM resolveGenVarM
 
-abstractTmM :: (Bitraversable h, Traversable g) => SpecTm h g (BoundTy g ResIndex) ResIndex -> Set ResIndex -> ComplexResM g (SpecFinal h g)
-abstractTmM h is = error "TODO"
-  -- let failIndex i = error ("Internal error: missing index " ++ show i)
-  -- in if Set.null is
-  --   then pure $! QuantBare (reindexTm failIndex h)
-  --   else do
-  --     let renaming = ILM.fromList (zip (Set.toAscList is) (fmap Index [0 ..]))
-  --         finalH = reindexTm (\i -> fromMaybe (failIndex i) (ILM.lookup i renaming)) h
-  --     vars <- gets crsVars
-  --     let finalVars = Seq.foldlWithIndex (\acc j mtyv -> if ILM.member (ResIndex j) renaming then acc :|> mtyv else acc) Empty vars
-  --     pure $! QuantForAll (ForAll finalVars finalH)
+abstractTmM :: (Bitraversable h, Traversable g) => SpecTm h g (BoundTy g ResIndex) (BoundTy g ResIndex) -> Set ResIndex -> ComplexResM g (SpecFinal h g)
+abstractTmM h is = do
+  h' <- bitraverse (`abstractTyM` is) (pure . flip sealTy is) h
+  if Set.null is
+    then pure (QuantBare h')
+    else do
+      vars <- gets crsVars
+      let finalVars = Seq.foldlWithIndex (\acc j mtyv -> if Set.member (ResIndex j) is then acc :|> mtyv else acc) Empty vars
+      pure (QuantForAll (ForAll finalVars h'))
 
+-- | For debugging, find the polytype associated with the given id.
 resolveGenVar :: Traversable g => UniqueId -> Graph g -> Either ComplexResErr (PolyTy g)
 resolveGenVar = runComplexResM . (resolveGenVarM >=> uncurry abstractTyM)
 
+-- | Resolve the partially-reconstructed term.
 resolveTm :: (Bitraversable h, Traversable g) => SpecInit h g -> Graph g -> Either ComplexResErr (SpecFinal h g)
 resolveTm = runComplexResM . (resolveTmM >=> uncurry abstractTmM)
 
+-- | For debugging, turn an Elem into a PreElem
 weakenElem :: Elem g -> PreElem g
 weakenElem = \case
   ElemNode g -> PreElemNode g
   ElemMeta tyb -> PreElemMeta tyb
   ElemSkolem tyb -> PreElemSkolem tyb
 
+-- | For debugging, turn a Graph into a PreGraph
 weaken :: Graph g -> PreGraph g
 weaken = UP.fromList . fmap (second weakenElem) . toList

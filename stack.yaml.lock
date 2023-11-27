@@ -5,22 +5,22 @@
 
 packages:
 - completed:
-    hackage: int-like-0.1.1@sha256:07edfd99581f97b0384611660f9453d34bcdf17e19a4907d195d288e3dcee735,3093
+    hackage: int-like-0.1.2@sha256:447b8bc1a137884e178067376df20a1477ebfc753e0336a97ddb91e03dc9ec78,3081
     pantry-tree:
-      size: 556
-      sha256: a81c294faf72ab621b70cada1bd53c53eb1c36fe9e2ab18d3354192c0824a16e
+      sha256: d3fd5a5c04278ea29b78d60a52db1be7e8b7d2af6caccb4868260665066633f8
+      size: 510
   original:
-    hackage: int-like-0.1.1
+    hackage: int-like-0.1.2
 - completed:
-    hackage: prop-unit-0.1.0@sha256:19a8942d0aa89ada2fd3944d7a63a63cbaf3909b6d6e43977cdc234e223dd906,2922
+    hackage: prop-unit-0.1.2@sha256:900ca80facbae8c5927f5aa2bb1fac461d49ea6e0c9b74e1767a7920f7d04c7c,2946
     pantry-tree:
-      size: 309
-      sha256: 0e7efcd2d185adc28d04a0ca399b1b623da123b390316e852d83d740b1f00126
+      sha256: 4be699532e4ba5950df273d0ab94b65ef4dab71d6f49ca411b010c8d923c999c
+      size: 263
   original:
-    hackage: prop-unit-0.1.0
+    hackage: prop-unit-0.1.2
 snapshots:
 - completed:
-    size: 619403
-    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/19/27.yaml
-    sha256: 1ecad1f0bd2c27de88dbff6572446cfdf647c615d58a7e2e2085c6b7dfc04176
-  original: lts-19.27
+    sha256: 7d4b649cf368f9076d8aa049aa44efe58950971d105892734e9957b2a26a2186
+    size: 640060
+    url: https://raw.githubusercontent.com/commercialhaskell/stackage-snapshots/master/lts/21/21.yaml
+  original: lts-21.21

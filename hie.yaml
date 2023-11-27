@@ -1,7 +1,2 @@
 cradle:
   stack:
-    - path: "./src"
-      component: "uniter:lib"
-
-    - path: "./test"
-      component: "uniter:test:uniter-test"

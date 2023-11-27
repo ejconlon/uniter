@@ -30,7 +30,7 @@ import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
 import Uniter.Align (Alignable (..), UnalignableErr (..))
 import Uniter.Core (Index, PolyTy, Quant (..), SpecFinal, TmVar, TyBinder (..), UniqueId, bareQuantTy, bindSpecTm,
-                    embedBoundTy, embedSpecTm, forAllQuantTy, monoToBoundTy, recSpecTm, varBoundTy)
+                    embedBoundTy, embedSpecTm, forAllQuantTy, monoToBoundTy, recSpecTm, varBoundTy, ForAll (..))
 import Uniter.Render (writeGraphDot, writePreGraphDot)
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
 import Uniter.Reunitable.Driver (ReuniteResult, ReuniteSuccess (..), reuniteResult)
@@ -207,16 +207,16 @@ inferCases =
   , -- succ undefined (should be int ty with the undefined specialized with int)
     let recon = embedSpecTm (AnnExpAppF (recSpecTm (AnnExpFree "succ")) (bindSpecTm (funDefs Map.! "undefined") (Seq.singleton (monoToBoundTy TyInt)) (recSpecTm (AnnExpFree "undefined"))))
     in InferCase "succ-undefined" (ExpApp (ExpFree "succ") (ExpFree "undefined")) (Just (QuantBare recon, bareQuantTy TyInt))
-  -- , -- id zero (should be int ty with id specialized with int)
-  --   let recon = embedSpecTm (AnnExpAppF (bindSpecTm (Seq.singleton (bareQuant TyInt)) (recSpecTm (AnnExpFree "id"))) (recSpecTm (AnnExpFree "zero")))
-  --   in InferCase "id-zero" (ExpApp (ExpFree "id") (ExpFree "zero")) (Just (recon, bareQuant TyInt))
-  -- , -- id undefined (should be poly)
-  --   -- TODO this is nonsense...
-  --   let recon = embedSpecTm $ AnnExpAppF
-  --         (bindSpecTm (Seq.singleton (forAllQuant (Seq.singleton (GenBinder 0 (Just "a"))) (varBoundTy 0))) (recSpecTm (AnnExpFree "id")))
-  --         (bindSpecTm (Seq.singleton (forAllQuant (Seq.singleton (GenBinder 2 (Just "a"))) (varBoundTy 0))) (recSpecTm (AnnExpFree "undefined")))
-  --       ty = forAllQuant (Seq.singleton (GenBinder 3 (Just "a"))) (varBoundTy 0)
-  --   in InferCase "id-undefined" (ExpApp (ExpFree "id") (ExpFree "undefined")) (Just (recon, ty))
+  , -- id zero (should be int ty with id specialized with int)
+    let recon = embedSpecTm (AnnExpAppF (bindSpecTm (funDefs Map.! "id") (Seq.singleton (monoToBoundTy TyInt)) (recSpecTm (AnnExpFree "id"))) (recSpecTm (AnnExpFree "zero")))
+    in InferCase "id-zero" (ExpApp (ExpFree "id") (ExpFree "zero")) (Just (QuantBare recon, bareQuantTy TyInt))
+  , -- id undefined (should be poly)
+    let recon = embedSpecTm $ AnnExpAppF
+          (bindSpecTm (funDefs Map.! "id") (Seq.singleton (varBoundTy 0)) (recSpecTm (AnnExpFree "id")))
+          (bindSpecTm (funDefs Map.! "undefined") (Seq.singleton (varBoundTy 0)) (recSpecTm (AnnExpFree "undefined")))
+        quant = QuantForAll (ForAll (Seq.singleton (TyBinder (Just "a"))) recon)
+        ty = forAllQuantTy (Seq.singleton (TyBinder (Just "a"))) (varBoundTy 0)
+    in InferCase "id-undefined" (ExpApp (ExpFree "id") (ExpFree "undefined")) (Just (quant, ty))
   ]
 
 inferWithFunDefs :: Exp UniqueId -> ReuniteResult UnalignableErr AnnExpF TyF

@@ -1,5 +1,6 @@
 {-# LANGUAGE UndecidableInstances #-}
 
+-- | (Import this qualified)
 module Uniter.PreGraph
   ( PreElem (..)
   , PreGraph (..)
@@ -10,12 +11,13 @@ module Uniter.PreGraph
   , lookup
   ) where
 
+import Data.Kind (Type)
 import IntLike.Map (IntLikeMap)
 import qualified IntLike.Map as ILM
 import Prelude hiding (lookup)
 import Uniter.Core (Node, TyBinder, UniqueId (..))
 
-data PreElem g =
+data PreElem (g :: Type -> Type) =
     PreElemNode !(Node g)
   | PreElemEq !UniqueId !UniqueId
   | PreElemMeta !TyBinder
@@ -25,7 +27,7 @@ deriving stock instance Eq (Node g) => Eq (PreElem g)
 deriving stock instance Ord (Node g) => Ord (PreElem g)
 deriving stock instance Show (Node g) => Show (PreElem g)
 
-newtype PreGraph g = PreGraph { unPreGraph :: IntLikeMap UniqueId (PreElem g) }
+newtype PreGraph (g :: Type -> Type) = PreGraph { unPreGraph :: IntLikeMap UniqueId (PreElem g) }
 
 deriving newtype instance Eq (Node g) => Eq (PreGraph g)
 deriving stock instance Show (Node g) => Show (PreGraph g)
