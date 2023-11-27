@@ -9,28 +9,32 @@ module Uniter.PreGraph
   , fromList
   , insert
   , lookup
-  ) where
+  )
+where
 
 import Data.Kind (Type)
 import IntLike.Map (IntLikeMap)
 import qualified IntLike.Map as ILM
-import Prelude hiding (lookup)
 import Uniter.Core (Node, TyBinder, UniqueId (..))
+import Prelude hiding (lookup)
 
-data PreElem (g :: Type -> Type) =
-    PreElemNode !(Node g)
+data PreElem (g :: Type -> Type)
+  = PreElemNode !(Node g)
   | PreElemEq !UniqueId !UniqueId
   | PreElemMeta !TyBinder
   | PreElemSkolem !TyBinder
 
-deriving stock instance Eq (Node g) => Eq (PreElem g)
-deriving stock instance Ord (Node g) => Ord (PreElem g)
-deriving stock instance Show (Node g) => Show (PreElem g)
+deriving stock instance (Eq (Node g)) => Eq (PreElem g)
 
-newtype PreGraph (g :: Type -> Type) = PreGraph { unPreGraph :: IntLikeMap UniqueId (PreElem g) }
+deriving stock instance (Ord (Node g)) => Ord (PreElem g)
 
-deriving newtype instance Eq (Node g) => Eq (PreGraph g)
-deriving stock instance Show (Node g) => Show (PreGraph g)
+deriving stock instance (Show (Node g)) => Show (PreElem g)
+
+newtype PreGraph (g :: Type -> Type) = PreGraph {unPreGraph :: IntLikeMap UniqueId (PreElem g)}
+
+deriving newtype instance (Eq (Node g)) => Eq (PreGraph g)
+
+deriving stock instance (Show (Node g)) => Show (PreGraph g)
 
 empty :: PreGraph g
 empty = PreGraph ILM.empty

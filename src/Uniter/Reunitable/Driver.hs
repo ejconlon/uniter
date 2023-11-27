@@ -7,7 +7,8 @@ module Uniter.Reunitable.Driver
   , reuniteResult
   , quickReuniteResult
   , driveReuniteResult
-  ) where
+  )
+where
 
 import Control.Exception (Exception)
 import Control.Monad.Catch (MonadThrow (..))
@@ -24,12 +25,13 @@ import Uniter.Process (ProcessErr, embedReuniterM, extract, newProcessState, run
 import Uniter.Reunitable.Class (Reunitable, reuniteTerm)
 import Uniter.Reunitable.Monad (ReuniterM, newReuniterEnv, newReuniterState, preGraph, runReuniterM)
 
-data ReuniteErr e h g =
-    ReuniteErrProcess !(ProcessErr e g)
+data ReuniteErr e h g
+  = ReuniteErrProcess !(ProcessErr e g)
   | ReuniteErrExtractTy !UniqueId !(SpecInit h g) !ComplexResErr !(Graph g)
   | ReuniteErrExtractTm !UniqueId !(SpecInit h g) !(PolyTy g) !ComplexResErr !(Graph g)
 
 deriving instance (Eq e, Eq (Node g), Eq (g (BoundTy g Index)), Eq (h UniqueId (SpecInit h g))) => Eq (ReuniteErr e h g)
+
 deriving instance (Show e, Show (Node g), Show (g (BoundTy g Index)), Show (h UniqueId (SpecInit h g))) => Show (ReuniteErr e h g)
 
 instance (Show e, Show (Node g), Show (g (BoundTy g Index)), Show (h UniqueId (SpecInit h g)), Typeable e, Typeable h, Typeable g) => Exception (ReuniteErr e h g)
@@ -46,15 +48,28 @@ type ReuniteResult e h g = Either (ReuniteErr e h g) (ReuniteSuccess h g)
 reuniteResult :: (Recursive t, Base t ~ f, Reunitable f h g, Alignable e g) => Map TmVar (PolyTy g) -> t -> (PreGraph g, ReuniteResult e h g)
 reuniteResult fm = driveReuniteResult fm . reuniteTerm
 
-quickReuniteResult ::
-  (Recursive t, Base t ~ f, Reunitable f h g, Alignable e g, MonadThrow m,
-  Show e, Show (Node g), Show (g (BoundTy g Index)), Show (h UniqueId (SpecInit h g)), Typeable e, Typeable g, Typeable h)
-  => Map TmVar (PolyTy g) -> t -> m (SpecFinal h g, PolyTy g)
+quickReuniteResult
+  :: ( Recursive t
+     , Base t ~ f
+     , Reunitable f h g
+     , Alignable e g
+     , MonadThrow m
+     , Show e
+     , Show (Node g)
+     , Show (g (BoundTy g Index))
+     , Show (h UniqueId (SpecInit h g))
+     , Typeable e
+     , Typeable g
+     , Typeable h
+     )
+  => Map TmVar (PolyTy g)
+  -> t
+  -> m (SpecFinal h g, PolyTy g)
 quickReuniteResult fm t =
   let r = snd (reuniteResult fm t)
-  in case r of
-    Left e -> throwM e
-    Right (ReuniteSuccess _ tm u _) -> pure (tm, u)
+  in  case r of
+        Left e -> throwM e
+        Right (ReuniteSuccess _ tm u _) -> pure (tm, u)
 
 driveReuniteResult :: (Bitraversable h, Alignable e g) => Map TmVar (PolyTy g) -> ReuniterM g (UniqueId, SpecInit h g) -> (PreGraph g, ReuniteResult e h g)
 driveReuniteResult fm act =
@@ -73,4 +88,4 @@ driveReuniteResult fm act =
               case resolveTm tm graph of
                 Left re -> Left (ReuniteErrExtractTm bid tm u re graph)
                 Right sq -> Right (ReuniteSuccess bid sq u graph)
-  in (pg, res)
+  in  (pg, res)

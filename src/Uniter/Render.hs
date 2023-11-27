@@ -8,7 +8,8 @@ module Uniter.Render
   , renderPreGraphDot
   , renderPreGraphDoc
   , writePreGraphDot
-  ) where
+  )
+where
 
 import qualified Algebra.Graph as AG
 import qualified Algebra.Graph.Export as AGE
@@ -37,23 +38,25 @@ reprPreElem = \case
   PreElemMeta tyb -> maybe "Meta" (\(TyVar n) -> "Meta " ++ T.unpack n) (unTyBinder tyb)
   PreElemSkolem tyb -> maybe "Skolem" (\(TyVar n) -> "Skolem " ++ T.unpack n) (unTyBinder tyb)
 
-elemChildren :: Foldable g => Elem g -> [UniqueId]
+elemChildren :: (Foldable g) => Elem g -> [UniqueId]
 elemChildren = \case
   ElemNode z -> toList z
   _ -> []
 
-preElemChildren :: Foldable g => PreElem g -> [UniqueId]
+preElemChildren :: (Foldable g) => PreElem g -> [UniqueId]
 preElemChildren = \case
   PreElemNode z -> toList z
   PreElemEq i j -> [i, j]
   _ -> []
 
-xformGraph :: Foldable g => Graph g -> AG.Graph UniqueId
-xformGraph = foldMap go . UG.toList where
+xformGraph :: (Foldable g) => Graph g -> AG.Graph UniqueId
+xformGraph = foldMap go . UG.toList
+ where
   go (b, e) = AG.vertex b <> foldMap (AG.edge b) (elemChildren e)
 
-xformPreGraph :: Foldable g => PreGraph g -> AG.Graph UniqueId
-xformPreGraph = foldMap go . UP.toList where
+xformPreGraph :: (Foldable g) => PreGraph g -> AG.Graph UniqueId
+xformPreGraph = foldMap go . UP.toList
+ where
   go (b, e) = AG.vertex b <> foldMap (AG.edge b) (preElemChildren e)
 
 reprInfo :: (Show (g Int), Functor g) => UniqueId -> Elem g -> String
@@ -76,15 +79,15 @@ renderGraphDot :: (Show (g Int), Functor g, Foldable g) => Graph g -> String
 renderGraphDot x =
   let g = xformGraph x
       s = AGED.defaultStyle reprUniqueId
-      t = s { AGED.vertexAttributes = \a -> ["label" AGED.:= reprLookup x a] }
-  in AGED.export t g
+      t = s {AGED.vertexAttributes = \a -> ["label" AGED.:= reprLookup x a]}
+  in  AGED.export t g
 
 renderGraphDoc :: (Show (g Int), Functor g, Foldable g) => Graph g -> String
 renderGraphDoc x =
   let g = xformGraph x
       vDoc a = AGE.literal (reprLookup x a) <> "\n"
       eDoc a b = AGE.literal (reprUniqueId a) <> " -> " <> AGE.literal (reprUniqueId b) <> "\n"
-  in AGE.render (AGE.export vDoc eDoc g)
+  in  AGE.render (AGE.export vDoc eDoc g)
 
 writeGraphDot :: (Show (g Int), Functor g, Foldable g) => FilePath -> Graph g -> IO ()
 writeGraphDot fp g = writeFile fp (renderGraphDot g)
@@ -93,15 +96,15 @@ renderPreGraphDot :: (Show (g Int), Functor g, Foldable g) => PreGraph g -> Stri
 renderPreGraphDot x =
   let g = xformPreGraph x
       s = AGED.defaultStyle reprUniqueId
-      t = s { AGED.vertexAttributes = \a -> ["label" AGED.:= reprPreLookup x a] }
-  in AGED.export t g
+      t = s {AGED.vertexAttributes = \a -> ["label" AGED.:= reprPreLookup x a]}
+  in  AGED.export t g
 
 renderPreGraphDoc :: (Show (g Int), Functor g, Foldable g) => PreGraph g -> String
 renderPreGraphDoc x =
   let g = xformPreGraph x
       vDoc a = AGE.literal (reprPreLookup x a) <> "\n"
       eDoc a b = AGE.literal (reprUniqueId a) <> " -> " <> AGE.literal (reprUniqueId b) <> "\n"
-  in AGE.render (AGE.export vDoc eDoc g)
+  in  AGE.render (AGE.export vDoc eDoc g)
 
 writePreGraphDot :: (Show (g Int), Functor g, Foldable g) => FilePath -> PreGraph g -> IO ()
 writePreGraphDot fp g = writeFile fp (renderPreGraphDot g)

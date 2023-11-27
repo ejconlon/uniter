@@ -1,7 +1,8 @@
 module Uniter.Align
   ( UnalignableErr (..)
   , Alignable (..)
-  ) where
+  )
+where
 
 import Control.Exception (Exception)
 import Data.Foldable (toList)
@@ -15,7 +16,7 @@ data UnalignableErr = UnalignableErr
 instance Exception UnalignableErr
 
 -- | Aligns the holes of compatible structures
-class Traversable f => Alignable e f | f -> e where
+class (Traversable f) => Alignable e f | f -> e where
   -- | If the two structures are alignable, return a structure filled with shared parts.
   -- Law: A structure must align with itself in the natural way.
   -- Law: Structures must individually align with their successful alignment in the natural way.
@@ -27,11 +28,12 @@ class Traversable f => Alignable e f | f -> e where
   alignWith f fa fb = fmap (fmap f) (align fa fb)
 
   -- | 'align' several things in one go
-  alignAll :: Foldable t => (These z a -> z) -> t (f a) -> Either (Maybe (Int, e)) (f z)
-  alignAll f = go 0 (Left Nothing) . toList where
+  alignAll :: (Foldable t) => (These z a -> z) -> t (f a) -> Either (Maybe (Int, e)) (f z)
+  alignAll f = go 0 (Left Nothing) . toList
+   where
     go !i acc = \case
       [] -> acc
-      fa:fas ->
+      fa : fas ->
         case acc of
           Right gz ->
             case alignWith f gz fa of

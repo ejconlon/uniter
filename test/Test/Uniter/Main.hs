@@ -14,20 +14,35 @@ import IntLike.Set (IntLikeSet)
 import qualified IntLike.Set as ILS
 import PropUnit (TestTree, testGroup, testMain, testUnit, (===))
 import Test.Uniter.State (applyS, applyTestS, runS, testS)
-import Uniter.Core (Index (..), Level (..), Quant (..), UniqueId, monoToPolyTy, recSpecTm)
+import Uniter.Core (ForAll (..), Index (..), Level (..), UniqueId, monoToPolyTy, recSpecTm)
 import Uniter.Example.Complex (InferCase (..), inferCases, inferWithFunDefs)
 import qualified Uniter.Example.Complex as Complex
 import qualified Uniter.Example.Simple as Simple
 import Uniter.OrderedMap (OrderedMap)
 import qualified Uniter.OrderedMap as OM
 import Uniter.Reunitable.Driver (ReuniteSuccess (..), quickReuniteResult)
-import Uniter.UnionMap (Changed (..), UnionEquiv (..), UnionMap, UnionMapAddVal (..), UnionMapLookupVal (..),
-                        UnionMapMergeVal (..), UnionMapTraceRes (..), UnionMergeOne, addUnionMapM, concatUnionMergeOne,
-                        emptyUnionMap, equivUnionMapM, lookupUnionMapM, mergeOneUnionMapM, sizeUnionMap, traceUnionMap,
-                        valuesUnionMap)
+import Uniter.UnionMap
+  ( Changed (..)
+  , UnionEquiv (..)
+  , UnionMap
+  , UnionMapAddVal (..)
+  , UnionMapLookupVal (..)
+  , UnionMapMergeVal (..)
+  , UnionMapTraceRes (..)
+  , UnionMergeOne
+  , addUnionMapM
+  , concatUnionMergeOne
+  , emptyUnionMap
+  , equivUnionMapM
+  , lookupUnionMapM
+  , mergeOneUnionMapM
+  , sizeUnionMap
+  , traceUnionMap
+  , valuesUnionMap
+  )
 import Uniter.Unitable.Driver (quickUniteResult)
 
-newtype V = V { unV :: Int }
+newtype V = V {unV :: Int}
   deriving newtype (Eq)
   deriving stock (Show)
 
@@ -159,11 +174,13 @@ testUmTail = testUnit "UM tail" $ runS emptyUMV $ do
     traceUnionMap (toV 'd') um === UnionMapTraceResFound (toV 'a') 4 [toV 'd']
 
 testUmUnit :: TestTree
-testUmUnit = testGroup "UM unit"
-  [ testUmSimple
-  , testUmRec
-  , testUmTail
-  ]
+testUmUnit =
+  testGroup
+    "UM unit"
+    [ testUmSimple
+    , testUmRec
+    , testUmTail
+    ]
 
 testOmUnit :: TestTree
 testOmUnit = testUnit "OM unit" $ do
@@ -229,7 +246,7 @@ testExampleComplex = testUnit "complex example" $ do
   let expLinTm = x1
       expLinTy = Complex.TyPair Complex.TyInt Complex.TyInt
   (actualLinTm, actualLinTy) <- quickReuniteResult mempty (Complex.exampleLinear @UniqueId)
-  actualLinTm === QuantBare (recSpecTm expLinTm)
+  actualLinTm === ForAll Seq.empty (recSpecTm expLinTm)
   actualLinTy === monoToPolyTy expLinTy
 
 runInferCase :: InferCase -> TestTree
@@ -250,10 +267,12 @@ testComplexCases :: TestTree
 testComplexCases = testGroup "complex cases" (fmap runInferCase inferCases)
 
 main :: IO ()
-main = testMain $ \_ -> testGroup "Uniter"
-  [ testUmUnit
-  , testOmUnit
-  , testExampleSimple
-  , testExampleComplex
-  , testComplexCases
-  ]
+main = testMain $ \_ ->
+  testGroup
+    "Uniter"
+    [ testUmUnit
+    , testOmUnit
+    , testExampleSimple
+    , testExampleComplex
+    , testComplexCases
+    ]

@@ -11,7 +11,8 @@ module Uniter
   , reuniteTerm
   , module Uniter.Core
   , module Uniter.Unitable.Driver
-  ) where
+  )
+where
 
 import Uniter.Align (Alignable (..), UnalignableErr (..))
 import Uniter.Core

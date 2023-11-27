@@ -2,7 +2,8 @@ module Uniter.Unitable.Class
   ( MonadUniter (..)
   , Unitable (..)
   , uniteTerm
-  ) where
+  )
+where
 
 import Data.Functor.Foldable (Base, Recursive (..))
 import Uniter.Core (TmVar, TyBinder, UniqueId, dummySpecTm)
@@ -24,7 +25,7 @@ class (Traversable g, Monad m) => MonadUniter g m | m -> g where
   -- | Lookup the type metavar of the given term variable in the given scope
   uniterResolveTmVar :: TmVar -> m UniqueId
 
-instance Traversable g => MonadUniter g (ReuniterM g) where
+instance (Traversable g) => MonadUniter g (ReuniterM g) where
   uniterAddNodeTy = addNodeTy
   uniterFreshVar = freshMetaVar
   uniterConstrainEq = constrainEq
@@ -40,7 +41,7 @@ class (Traversable f, Traversable g) => Unitable f g | f -> g where
   -- | Inspects the expression functor, performing effects to
   -- allocate fresh unification vars, introduce equalities, and add nodes to the graph,
   -- returning the ID associated with this value.
-  unite :: MonadUniter g m => f (m UniqueId) -> m UniqueId
+  unite :: (MonadUniter g m) => f (m UniqueId) -> m UniqueId
 
 -- | Perform unification bottom-up on a 'Recursive' term.
 uniteTerm :: (Recursive t, Base t ~ f, Unitable f g, MonadUniter g m) => t -> m UniqueId

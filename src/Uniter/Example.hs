@@ -1,6 +1,7 @@
 module Uniter.Example
   ( main
-  ) where
+  )
+where
 
 import qualified Uniter.Example.Complex
 import qualified Uniter.Example.Simple

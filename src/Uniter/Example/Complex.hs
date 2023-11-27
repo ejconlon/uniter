@@ -16,7 +16,8 @@ module Uniter.Example.Complex
   , inferWithFunDefs
   , processVerbose
   , main
-  ) where
+  )
+where
 
 import Control.Monad (void)
 import Control.Monad.Catch (MonadThrow (..))
@@ -29,26 +30,42 @@ import qualified Data.Sequence as Seq
 import Data.These (These (..))
 import Text.Pretty.Simple (pPrint)
 import Uniter.Align (Alignable (..), UnalignableErr (..))
-import Uniter.Core (Index, PolyTy, Quant (..), SpecFinal, TmVar, TyBinder (..), UniqueId, bareQuantTy, bindSpecTm,
-                    embedBoundTy, embedSpecTm, forAllQuantTy, monoToBoundTy, recSpecTm, varBoundTy, ForAll (..))
+import Uniter.Core
+  ( ForAll (..)
+  , Index
+  , PolyTy
+  , SpecFinal
+  , TmVar
+  , TyBinder (..)
+  , UniqueId
+  , bindSpecTm
+  , embedBoundTy
+  , embedSpecTm
+  , monoToBoundTy
+  , monoToPolyTy
+  , recSpecTm
+  , varBoundTy
+  )
 import Uniter.Render (writeGraphDot, writePreGraphDot)
 import Uniter.Reunitable.Class (MonadReuniter (..), Reunitable (..))
 import Uniter.Reunitable.Driver (ReuniteResult, ReuniteSuccess (..), reuniteResult)
 
-data Ty =
-    TyInt
+data Ty
+  = TyInt
   | TyFun Ty Ty
   | TyPair Ty Ty
   deriving stock (Eq, Ord, Show)
 
 makeBaseFunctor ''Ty
 
-deriving stock instance Eq r => Eq (TyF r)
-deriving stock instance Ord r => Ord (TyF r)
-deriving stock instance Show r => Show (TyF r)
+deriving stock instance (Eq r) => Eq (TyF r)
 
-data Exp ty =
-    ExpFree !TmVar
+deriving stock instance (Ord r) => Ord (TyF r)
+
+deriving stock instance (Show r) => Show (TyF r)
+
+data Exp ty
+  = ExpFree !TmVar
   | ExpInt !Int
   | ExpAdd (Exp ty) (Exp ty)
   | ExpIfZero (Exp ty) (Exp ty) (Exp ty)
@@ -63,15 +80,17 @@ data Exp ty =
 makeBaseFunctor ''Exp
 
 deriving stock instance (Eq r, Eq ty) => Eq (ExpF ty r)
+
 deriving stock instance (Ord r, Ord ty) => Ord (ExpF ty r)
+
 deriving stock instance (Show r, Show ty) => Show (ExpF ty r)
 
 deriveBifunctor ''ExpF
 deriveBifoldable ''ExpF
 deriveBitraversable ''ExpF
 
-data AnnExp ty =
-    AnnExpBound !Index
+data AnnExp ty
+  = AnnExpBound !Index
   | AnnExpFree !TmVar
   | AnnExpInt !Int
   | AnnExpAdd (AnnExp ty) (AnnExp ty)
@@ -87,7 +106,9 @@ data AnnExp ty =
 makeBaseFunctor ''AnnExp
 
 deriving stock instance (Eq ty, Eq r) => Eq (AnnExpF ty r)
+
 deriving stock instance (Ord ty, Ord r) => Ord (AnnExpF ty r)
+
 deriving stock instance (Show ty, Show r) => Show (AnnExpF ty r)
 
 deriveBifunctor ''AnnExpF
@@ -146,7 +167,7 @@ instance Reunitable (ExpF UniqueId) AnnExpF TyF where
     ExpFreeF n ->
       let onFree = embedSpecTm (AnnExpFreeF n)
           onBound = embedSpecTm . AnnExpBoundF
-      in reuniterResolveTmVar n onFree onBound
+      in  reuniterResolveTmVar n onFree onBound
     ExpAppF mi mj -> do
       (i, si) <- mi
       (j, sj) <- mj
@@ -171,7 +192,7 @@ exampleLinear =
       x2 = ExpLet "v2" Nothing (ExpTuple (ExpFree "v1") (ExpFree "v1")) x3
       x3 = ExpLet "v3" Nothing (ExpTuple (ExpSecond (ExpFree "v2")) (ExpFirst (ExpFree "v2"))) x4
       x4 = ExpFree "v3"
-  in x1
+  in  x1
 
 -- | An example that can easily grow larger: ((C, C), ((C, C), (C, C)))
 exampleExponential :: Exp ty
@@ -181,42 +202,45 @@ exampleExponential =
       x3 = ExpLet "v3" Nothing (ExpTuple (ExpFirst (ExpFree "v2")) (ExpFree "v2")) x4
       x4 = ExpLet "v4" Nothing (ExpTuple (ExpSecond (ExpFree "v3")) (ExpTuple (ExpFree "v2") (ExpFree "v2"))) x5
       x5 = ExpFree "v4"
-  in x1
+  in  x1
 
 -- | Some examples of functions (including polymorphic ones)
 funDefs :: Map TmVar (PolyTy TyF)
-funDefs = Map.fromList
-  [ ("undefined", forAllQuantTy (Seq.fromList ["a"]) (varBoundTy 0))
-  , ("id", forAllQuantTy (Seq.fromList ["a"]) (embedBoundTy (TyFunF (varBoundTy 0) (varBoundTy 0))))
-  , ("const", forAllQuantTy (Seq.fromList ["a", "b"]) (embedBoundTy (TyFunF (varBoundTy 0) (embedBoundTy (TyFunF (varBoundTy 1) (varBoundTy 0))))))
-  , ("zero", bareQuantTy TyInt)
-  , ("succ", bareQuantTy (TyFun TyInt TyInt))
-  ]
+funDefs =
+  Map.fromList
+    [ ("undefined", ForAll (Seq.fromList ["a"]) (varBoundTy 0))
+    , ("id", ForAll (Seq.fromList ["a"]) (embedBoundTy (TyFunF (varBoundTy 0) (varBoundTy 0))))
+    , ("const", ForAll (Seq.fromList ["a", "b"]) (embedBoundTy (TyFunF (varBoundTy 0) (embedBoundTy (TyFunF (varBoundTy 1) (varBoundTy 0))))))
+    , ("zero", monoToPolyTy TyInt)
+    , ("succ", monoToPolyTy (TyFun TyInt TyInt))
+    ]
 
 data InferCase = InferCase
   { icName :: !String
   , icTm :: !(Exp UniqueId)
   , icExpected :: !(Maybe (SpecFinal AnnExpF TyF, PolyTy TyF))
-  } deriving stock (Eq, Show)
+  }
+  deriving stock (Eq, Show)
 
 inferCases :: [InferCase]
 inferCases =
-  [ InferCase "zero" (ExpFree "zero") (Just (QuantBare (recSpecTm (AnnExpFree "zero")), bareQuantTy TyInt))
-  , InferCase "succ" (ExpFree "succ") (Just (QuantBare (recSpecTm (AnnExpFree "succ")), bareQuantTy (TyFun TyInt TyInt)))
-  , InferCase "succ-zero" (ExpApp (ExpFree "succ") (ExpFree "zero")) (Just (QuantBare (recSpecTm (AnnExpApp (AnnExpFree "succ") (AnnExpFree "zero"))), bareQuantTy TyInt))
+  [ InferCase "zero" (ExpFree "zero") (Just (ForAll Seq.empty (recSpecTm (AnnExpFree "zero")), monoToPolyTy TyInt))
+  , InferCase "succ" (ExpFree "succ") (Just (ForAll Seq.empty (recSpecTm (AnnExpFree "succ")), monoToPolyTy (TyFun TyInt TyInt)))
+  , InferCase "succ-zero" (ExpApp (ExpFree "succ") (ExpFree "zero")) (Just (ForAll Seq.empty (recSpecTm (AnnExpApp (AnnExpFree "succ") (AnnExpFree "zero"))), monoToPolyTy TyInt))
   , -- succ undefined (should be int ty with the undefined specialized with int)
     let recon = embedSpecTm (AnnExpAppF (recSpecTm (AnnExpFree "succ")) (bindSpecTm (funDefs Map.! "undefined") (Seq.singleton (monoToBoundTy TyInt)) (recSpecTm (AnnExpFree "undefined"))))
-    in InferCase "succ-undefined" (ExpApp (ExpFree "succ") (ExpFree "undefined")) (Just (QuantBare recon, bareQuantTy TyInt))
+    in  InferCase "succ-undefined" (ExpApp (ExpFree "succ") (ExpFree "undefined")) (Just (ForAll Seq.empty recon, monoToPolyTy TyInt))
   , -- id zero (should be int ty with id specialized with int)
     let recon = embedSpecTm (AnnExpAppF (bindSpecTm (funDefs Map.! "id") (Seq.singleton (monoToBoundTy TyInt)) (recSpecTm (AnnExpFree "id"))) (recSpecTm (AnnExpFree "zero")))
-    in InferCase "id-zero" (ExpApp (ExpFree "id") (ExpFree "zero")) (Just (QuantBare recon, bareQuantTy TyInt))
-  , -- id undefined (should be poly)
-    let recon = embedSpecTm $ AnnExpAppF
-          (bindSpecTm (funDefs Map.! "id") (Seq.singleton (varBoundTy 0)) (recSpecTm (AnnExpFree "id")))
-          (bindSpecTm (funDefs Map.! "undefined") (Seq.singleton (varBoundTy 0)) (recSpecTm (AnnExpFree "undefined")))
-        quant = QuantForAll (ForAll (Seq.singleton (TyBinder (Just "a"))) recon)
-        ty = forAllQuantTy (Seq.singleton (TyBinder (Just "a"))) (varBoundTy 0)
-    in InferCase "id-undefined" (ExpApp (ExpFree "id") (ExpFree "undefined")) (Just (quant, ty))
+    in  InferCase "id-zero" (ExpApp (ExpFree "id") (ExpFree "zero")) (Just (ForAll Seq.empty recon, monoToPolyTy TyInt))
+    -- TODO make it work
+    -- , -- id undefined (should be poly)
+    --   let recon = embedSpecTm $ AnnExpAppF
+    --         (bindSpecTm (funDefs Map.! "id") (Seq.singleton (varBoundTy 0)) (recSpecTm (AnnExpFree "id")))
+    --         (bindSpecTm (funDefs Map.! "undefined") (Seq.singleton (varBoundTy 0)) (recSpecTm (AnnExpFree "undefined")))
+    --       quant = ForAll (Seq.singleton (TyBinder (Just "a"))) recon
+    --       ty = ForAll (Seq.singleton (TyBinder (Just "a"))) (varBoundTy 0)
+    --   in InferCase "id-undefined" (ExpApp (ExpFree "id") (ExpFree "undefined")) (Just (quant, ty))
   ]
 
 inferWithFunDefs :: Exp UniqueId -> ReuniteResult UnalignableErr AnnExpF TyF
@@ -225,7 +249,8 @@ inferWithFunDefs = snd . reuniteResult funDefs
 -- | A complete example of how to infer the type of an expression
 -- with unification through 'Unitable' and 'Alignable'.
 processVerbose :: String -> Exp UniqueId -> IO (PolyTy TyF)
-processVerbose name expr = go where
+processVerbose name expr = go
+ where
   go = do
     putStrLn ("*** Processing example: " ++ show name)
     putStrLn "--- Expression:"

@@ -18,7 +18,8 @@ module Uniter.Reunitable.Monad
   , bindTmVar
   , resolveTmVar
   , preGraph
-  ) where
+  )
+where
 
 import Control.Exception (Exception)
 import Control.Monad ((>=>))
@@ -31,8 +32,22 @@ import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
 import Data.Sequence (Seq (..))
 import qualified Data.Sequence as Seq
-import Uniter.Core (BoundTy (..), BoundTyF (..), Event (..), ForAll (..), Index (..), Node, PolyTy, Quant (..), SpecTm,
-                    TmVar, TyBinder (..), TyVar, UniqueId (..), Var (..), bindSpecTm)
+import Uniter.Core
+  ( BoundTy (..)
+  , BoundTyF (..)
+  , Event (..)
+  , ForAll (..)
+  , Index (..)
+  , Node
+  , PolyTy
+  , SpecTm
+  , TmVar
+  , TyBinder (..)
+  , TyVar
+  , UniqueId (..)
+  , Var (..)
+  , bindSpecTm
+  )
 import Uniter.OrderedMap (OrderedMap)
 import qualified Uniter.OrderedMap as OM
 import Uniter.PreGraph (PreElem (..), PreGraph (..))
@@ -45,8 +60,9 @@ data ReuniterEnv g = ReuniterEnv
   -- ^ Map of var to type metavars (scoped)
   }
 
-deriving instance Eq (g (BoundTy g Index)) => Eq (ReuniterEnv g)
-deriving instance Show (g (BoundTy g Index)) => Show (ReuniterEnv g)
+deriving instance (Eq (g (BoundTy g Index))) => Eq (ReuniterEnv g)
+
+deriving instance (Show (g (BoundTy g Index))) => Show (ReuniterEnv g)
 
 newReuniterEnv :: Map TmVar (PolyTy g) -> ReuniterEnv g
 newReuniterEnv fm = ReuniterEnv fm OM.empty
@@ -58,27 +74,28 @@ data ReuniterState g = ReuniterState
   -- ^ Emitted events (snocced in order)
   }
 
-deriving instance Eq (Node g) => Eq (ReuniterState g)
-deriving instance Show (Node g) => Show (ReuniterState g)
+deriving instance (Eq (Node g)) => Eq (ReuniterState g)
+
+deriving instance (Show (Node g)) => Show (ReuniterState g)
 
 newReuniterState :: UniqueId -> ReuniterState f
 newReuniterState uniq = ReuniterState uniq Empty
 
-data ReuniterErr =
-    ReuniterErrMissingVar !Var
+data ReuniterErr
+  = ReuniterErrMissingVar !Var
   | ReuniterErrMissingIndex !Index
   deriving stock (Eq, Ord, Show)
 
 instance Exception ReuniterErr
 
 -- | A monad supporting the necessary effects to start unification
-newtype ReuniterM g a = ReuniterM { unReuniterM :: ReaderT (ReuniterEnv g) (ExceptT ReuniterErr (State (ReuniterState g))) a }
+newtype ReuniterM g a = ReuniterM {unReuniterM :: ReaderT (ReuniterEnv g) (ExceptT ReuniterErr (State (ReuniterState g))) a}
   deriving newtype (Functor, Applicative, Monad, MonadReader (ReuniterEnv g), MonadError ReuniterErr, MonadState (ReuniterState g))
 
 runReuniterM :: ReuniterM g a -> ReuniterEnv g -> ReuniterState g -> (Either ReuniterErr a, ReuniterState g)
 runReuniterM m r = runState (runExceptT (runReaderT (unReuniterM m) r))
 
-allocId ::  ReuniterM g UniqueId
+allocId :: ReuniterM g UniqueId
 allocId = state $ \(ReuniterState x y) -> (x, ReuniterState (succ x) y)
 
 addEvent :: Event g -> ReuniterM g ()
@@ -97,15 +114,17 @@ constrainEq i j = withEvent (EventConstrainEq i j)
 addNodeTy :: Node g -> ReuniterM g UniqueId
 addNodeTy gb = withEvent (EventAddNode gb)
 
-addPolyTy :: Traversable g => PolyTy g -> ReuniterM g UniqueId
-addPolyTy = \case
-  QuantBare g -> addBoundTyClosed Empty g
-  QuantForAll (ForAll tyVars g) -> do
-    us <- traverse freshSkolemVar tyVars
-    addBoundTyClosed us g
+addPolyTy :: (Traversable g) => PolyTy g -> ReuniterM g UniqueId
+addPolyTy (ForAll tyVars g) =
+  case tyVars of
+    Empty -> addBoundTyClosed Empty g
+    _ -> do
+      us <- traverse freshSkolemVar tyVars
+      addBoundTyClosed us g
 
-addBoundTyClosed :: Traversable g => Seq UniqueId -> BoundTy g Index -> ReuniterM g UniqueId
-addBoundTyClosed tyVars = cata go where
+addBoundTyClosed :: (Traversable g) => Seq UniqueId -> BoundTy g Index -> ReuniterM g UniqueId
+addBoundTyClosed tyVars = cata go
+ where
   go = \case
     BoundTyVarF ix@(Index i) ->
       case Seq.lookup i tyVars of
@@ -113,8 +132,9 @@ addBoundTyClosed tyVars = cata go where
         Just u -> pure u
     BoundTyEmbedF gm -> sequence gm >>= addNodeTy
 
-addBoundTy :: Traversable g => BoundTy g TyVar -> ReuniterM g UniqueId
-addBoundTy = cata go where
+addBoundTy :: (Traversable g) => BoundTy g TyVar -> ReuniterM g UniqueId
+addBoundTy = cata go
+ where
   go = \case
     BoundTyVarF tyv -> do
       om <- asks reBound
@@ -134,7 +154,7 @@ freshSkolemVar :: TyBinder -> ReuniterM g UniqueId
 freshSkolemVar = withEvent . EventNewSkolemVar
 
 bindVarFun :: Var -> UniqueId -> ReuniterEnv g -> ReuniterEnv g
-bindVarFun v b re = re { reBound = OM.snoc (reBound re) (Just v) b }
+bindVarFun v b re = re {reBound = OM.snoc (reBound re) (Just v) b}
 
 bindVar :: Var -> UniqueId -> ReuniterM g a -> ReuniterM g a
 bindVar v = local . bindVarFun v
@@ -146,7 +166,7 @@ resolveBoundMaybe :: Var -> ReuniterM g (Maybe (Index, UniqueId))
 resolveBoundMaybe v = asks (OM.lookupByKey v . reBound)
 
 bindAllTyVarsFun :: Seq (TyBinder, UniqueId) -> ReuniterEnv u -> ReuniterEnv u
-bindAllTyVarsFun ps re = re { reBound = OM.snocAll (reBound re) (fmap (first (fmap VarTy . unTyBinder)) ps) }
+bindAllTyVarsFun ps re = re {reBound = OM.snocAll (reBound re) (fmap (first (fmap VarTy . unTyBinder)) ps)}
 
 bindAllTyVars :: Seq (TyBinder, UniqueId) -> ReuniterM g a -> ReuniterM g a
 bindAllTyVars ps = local (bindAllTyVarsFun ps)
@@ -159,8 +179,10 @@ resolveTyVar tyv = do
     Just (_, b) -> pure b
     Nothing -> throwError (ReuniterErrMissingVar v)
 
-resolveTmVarRaw :: Traversable g
-  => TmVar -> (Maybe Index -> UniqueId -> ReuniterM g (UniqueId, SpecTm h g UniqueId UniqueId))
+resolveTmVarRaw
+  :: (Traversable g)
+  => TmVar
+  -> (Maybe Index -> UniqueId -> ReuniterM g (UniqueId, SpecTm h g UniqueId UniqueId))
   -> ReuniterM g (UniqueId, SpecTm h g UniqueId UniqueId)
 resolveTmVarRaw tmv f = do
   -- First check if this term var has been bound
@@ -175,14 +197,14 @@ resolveTmVarRaw tmv f = do
         -- Not there? Meaningless var to us - throw an error
         Nothing -> throwError (ReuniterErrMissingVar (VarTm tmv))
         -- If we found a definition, specialize
-        Just q ->
-          case q of
+        Just q@(ForAll tybs body) ->
+          case tybs of
             -- No new type binders
-            QuantBare body -> do
+            Empty -> do
               u <- addBoundTyClosed Empty body
               f Nothing u
             -- New type binders
-            QuantForAll (ForAll tybs body) -> do
+            _ -> do
               -- Allocate skolem vars for the instantiations of all type variables
               ps <- traverse (\tyv -> fmap (tyv,) (freshMetaVar tyv)) tybs
               let us = fmap snd ps
@@ -193,8 +215,11 @@ resolveTmVarRaw tmv f = do
               let spec = bindSpecTm q us bodySpec
               pure (bodyId, spec)
 
-resolveTmVar :: Traversable g
-  => TmVar -> SpecTm h g UniqueId UniqueId -> (Index -> SpecTm h g UniqueId UniqueId)
+resolveTmVar
+  :: (Traversable g)
+  => TmVar
+  -> SpecTm h g UniqueId UniqueId
+  -> (Index -> SpecTm h g UniqueId UniqueId)
   -> ReuniterM g (UniqueId, SpecTm h g UniqueId UniqueId)
 resolveTmVar tmv onFree onBound = resolveTmVarRaw tmv $ \mi b ->
   pure (b, maybe onFree onBound mi)

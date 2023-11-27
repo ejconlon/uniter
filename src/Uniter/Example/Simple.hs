@@ -12,7 +12,8 @@ module Uniter.Example.Simple
   , exampleExponential
   , processVerbose
   , main
-  ) where
+  )
+where
 
 import Control.Monad (void)
 import Control.Monad.Catch (MonadThrow (..))
@@ -26,8 +27,8 @@ import Uniter.Unitable.Class (MonadUniter (..), Unitable (..))
 import Uniter.Unitable.Driver (UniteSuccess (..), uniteResult)
 
 -- | A simple expression language with constants, vars, lets, tuples, and projections.
-data Exp =
-    ExpConst
+data Exp
+  = ExpConst
   | ExpUseBind !TmVar
   | ExpDefBind !TmVar Exp Exp
   | ExpTuple Exp Exp
@@ -38,20 +39,22 @@ data Exp =
 -- TH can build us an expression functor ExpF to factor our the recursion.
 makeBaseFunctor ''Exp
 
-deriving stock instance Eq a => Eq (ExpF a)
-deriving stock instance Show a => Show (ExpF a)
+deriving stock instance (Eq a) => Eq (ExpF a)
+
+deriving stock instance (Show a) => Show (ExpF a)
 
 -- | Our expressions are either constant type or pairs of types.
-data Ty =
-    TyConst
+data Ty
+  = TyConst
   | TyPair Ty Ty
   deriving stock (Eq, Show)
 
 -- Builds a type functor TyF
 makeBaseFunctor ''Ty
 
-deriving stock instance Eq a => Eq (TyF a)
-deriving stock instance Show a => Show (TyF a)
+deriving stock instance (Eq a) => Eq (TyF a)
+
+deriving stock instance (Show a) => Show (TyF a)
 
 instance Alignable UnalignableErr TyF where
   -- Align our type functor in the natural way
@@ -108,7 +111,7 @@ exampleLinear =
       x2 = ExpDefBind "v2" (ExpTuple (ExpUseBind "v1") (ExpUseBind "v1")) x3
       x3 = ExpDefBind "v3" (ExpTuple (ExpSecond (ExpUseBind "v2")) (ExpFirst (ExpUseBind "v2"))) x4
       x4 = ExpUseBind "v3"
-  in x1
+  in  x1
 
 -- | An example that can easily grow larger: ((C, C), ((C, C), (C, C)))
 exampleExponential :: Exp
@@ -118,12 +121,13 @@ exampleExponential =
       x3 = ExpDefBind "v3" (ExpTuple (ExpFirst (ExpUseBind "v2")) (ExpUseBind "v2")) x4
       x4 = ExpDefBind "v4" (ExpTuple (ExpSecond (ExpUseBind "v3")) (ExpTuple (ExpUseBind "v2") (ExpUseBind "v2"))) x5
       x5 = ExpUseBind "v4"
-  in x1
+  in  x1
 
 -- | A complete example of how to infer the type of an expression
 -- with unification through 'Unitable' and 'Alignable'.
 processVerbose :: String -> Exp -> IO Ty
-processVerbose name expr = go where
+processVerbose name expr = go
+ where
   go = do
     putStrLn ("*** Processing example: " ++ show name)
     putStrLn "--- Expression:"
