@@ -224,23 +224,24 @@ data InferCase = InferCase
 
 inferCases :: [InferCase]
 inferCases =
-  [ InferCase "zero" (ExpFree "zero") (Just (ForAll Seq.empty (recSpecTm (AnnExpFree "zero")), monoToPolyTy TyInt))
-  , InferCase "succ" (ExpFree "succ") (Just (ForAll Seq.empty (recSpecTm (AnnExpFree "succ")), monoToPolyTy (TyFun TyInt TyInt)))
-  , InferCase "succ-zero" (ExpApp (ExpFree "succ") (ExpFree "zero")) (Just (ForAll Seq.empty (recSpecTm (AnnExpApp (AnnExpFree "succ") (AnnExpFree "zero"))), monoToPolyTy TyInt))
-  , -- succ undefined (should be int ty with the undefined specialized with int)
-    let recon = embedSpecTm (AnnExpAppF (recSpecTm (AnnExpFree "succ")) (bindSpecTm (funDefs Map.! "undefined") (Seq.singleton (monoToBoundTy TyInt)) (recSpecTm (AnnExpFree "undefined"))))
-    in  InferCase "succ-undefined" (ExpApp (ExpFree "succ") (ExpFree "undefined")) (Just (ForAll Seq.empty recon, monoToPolyTy TyInt))
-  , -- id zero (should be int ty with id specialized with int)
-    let recon = embedSpecTm (AnnExpAppF (bindSpecTm (funDefs Map.! "id") (Seq.singleton (monoToBoundTy TyInt)) (recSpecTm (AnnExpFree "id"))) (recSpecTm (AnnExpFree "zero")))
-    in  InferCase "id-zero" (ExpApp (ExpFree "id") (ExpFree "zero")) (Just (ForAll Seq.empty recon, monoToPolyTy TyInt))
-    -- TODO make it work
-    -- , -- id undefined (should be poly)
-    --   let recon = embedSpecTm $ AnnExpAppF
-    --         (bindSpecTm (funDefs Map.! "id") (Seq.singleton (varBoundTy 0)) (recSpecTm (AnnExpFree "id")))
-    --         (bindSpecTm (funDefs Map.! "undefined") (Seq.singleton (varBoundTy 0)) (recSpecTm (AnnExpFree "undefined")))
-    --       quant = ForAll (Seq.singleton (TyBinder (Just "a"))) recon
-    --       ty = ForAll (Seq.singleton (TyBinder (Just "a"))) (varBoundTy 0)
-    --   in InferCase "id-undefined" (ExpApp (ExpFree "id") (ExpFree "undefined")) (Just (quant, ty))
+  -- [ InferCase "zero" (ExpFree "zero") (Just (ForAll Seq.empty (recSpecTm (AnnExpFree "zero")), monoToPolyTy TyInt))
+  -- , InferCase "succ" (ExpFree "succ") (Just (ForAll Seq.empty (recSpecTm (AnnExpFree "succ")), monoToPolyTy (TyFun TyInt TyInt)))
+  -- , InferCase "succ-zero" (ExpApp (ExpFree "succ") (ExpFree "zero")) (Just (ForAll Seq.empty (recSpecTm (AnnExpApp (AnnExpFree "succ") (AnnExpFree "zero"))), monoToPolyTy TyInt))
+  -- , -- succ undefined (should be int ty with the undefined specialized with int)
+  --   let recon = embedSpecTm (AnnExpAppF (recSpecTm (AnnExpFree "succ")) (bindSpecTm (funDefs Map.! "undefined") (Seq.singleton (monoToBoundTy TyInt)) (recSpecTm (AnnExpFree "undefined"))))
+  --   in  InferCase "succ-undefined" (ExpApp (ExpFree "succ") (ExpFree "undefined")) (Just (ForAll Seq.empty recon, monoToPolyTy TyInt))
+  -- , -- id zero (should be int ty with id specialized with int)
+  --   let recon = embedSpecTm (AnnExpAppF (bindSpecTm (funDefs Map.! "id") (Seq.singleton (monoToBoundTy TyInt)) (recSpecTm (AnnExpFree "id"))) (recSpecTm (AnnExpFree "zero")))
+  --   in  InferCase "id-zero" (ExpApp (ExpFree "id") (ExpFree "zero")) (Just (ForAll Seq.empty recon, monoToPolyTy TyInt))
+  [ -- id undefined (should be poly)
+    let recon =
+          embedSpecTm $
+            AnnExpAppF
+              (bindSpecTm (funDefs Map.! "id") (Seq.singleton (varBoundTy 0)) (recSpecTm (AnnExpFree "id")))
+              (bindSpecTm (funDefs Map.! "undefined") (Seq.singleton (varBoundTy 0)) (recSpecTm (AnnExpFree "undefined")))
+        quant = ForAll (Seq.singleton (TyBinder (Just "a"))) recon
+        ty = ForAll (Seq.singleton (TyBinder (Just "a"))) (varBoundTy 0)
+    in  InferCase "id-undefined" (ExpApp (ExpFree "id") (ExpFree "undefined")) (Just (quant, ty))
   ]
 
 inferWithFunDefs :: Exp UniqueId -> ReuniteResult UnalignableErr AnnExpF TyF
@@ -277,6 +278,6 @@ processVerbose name expr = go
 
 main :: IO ()
 main = do
-  void $ processVerbose "complex-linear" exampleLinear
-  void $ processVerbose "complex-exponential" exampleExponential
+  -- void $ processVerbose "complex-linear" exampleLinear
+  -- void $ processVerbose "complex-exponential" exampleExponential
   for_ inferCases (\(InferCase name tm _) -> processVerbose ("complex-" ++ name) tm)

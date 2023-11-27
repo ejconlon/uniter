@@ -44,21 +44,7 @@ import Uniter.Reunitable.Monad
   , newReuniterState
   , runReuniterM
   )
-import Uniter.UnionMap
-  ( UnionEntry (..)
-  , UnionMap (..)
-  , UnionMapAddVal (..)
-  , UnionMapLens
-  , UnionMapLookupVal (..)
-  , UnionMapMergeVal (..)
-  , UnionMergeMany
-  , addUnionMapLM
-  , canonicalizeUnionMapLM
-  , compactUnionMapLM
-  , emptyUnionMap
-  , lookupUnionMapLM
-  , mergeManyUnionMapLM
-  )
+import qualified Uniter.UnionMap as UM
 
 type RebindMap = IntLikeMap UniqueId UniqueId
 
@@ -80,18 +66,18 @@ instance (Show e, Typeable e, Show (Node g), Typeable g) => Exception (ProcessEr
 
 data ProcessState (g :: Type -> Type) = ProcessState
   { psUnique :: !UniqueId
-  , psUnionMap :: !(UnionMap UniqueId (Elem g))
+  , psUnionMap :: !(UM.UnionMap UniqueId (Elem g))
   }
 
 deriving stock instance (Eq (g UniqueId)) => Eq (ProcessState g)
 
 deriving stock instance (Show (g UniqueId)) => Show (ProcessState g)
 
-psUnionMapL :: UnionMapLens (ProcessState g) UniqueId (Elem g)
+psUnionMapL :: UM.UnionMapLens (ProcessState g) UniqueId (Elem g)
 psUnionMapL = lens psUnionMap (\ps um -> ps {psUnionMap = um})
 
 newProcessState :: UniqueId -> ProcessState g
-newProcessState uniq = ProcessState uniq emptyUnionMap
+newProcessState uniq = ProcessState uniq UM.empty
 
 newtype ProcessM e g a = ProcessM {unProcessM :: ExceptT (ProcessErr e g) (State (ProcessState g)) a}
   deriving newtype (Functor, Applicative, Monad, MonadState (ProcessState g), MonadError (ProcessErr e g))
@@ -100,26 +86,26 @@ runProcessM :: ProcessM e g a -> ProcessState g -> (Either (ProcessErr e g) a, P
 runProcessM = runState . runExceptT . unProcessM
 
 compactOnState :: ProcessState g -> (RebindMap, ProcessState g)
-compactOnState = runState (compactUnionMapLM psUnionMapL)
+compactOnState = runState (UM.compactLM psUnionMapL)
 
 canonicalizeOnState :: (Traversable g) => ProcessState g -> (RebindMap, ProcessState g)
-canonicalizeOnState = runState (canonicalizeUnionMapLM psUnionMapL elemTraversal)
+canonicalizeOnState = runState (UM.canonicalizeLM psUnionMapL elemTraversal)
 
 extractOnState :: (Traversable g) => ProcessState g -> ((RebindMap, Graph g), ProcessState g)
 extractOnState ps = res
  where
   res =
     let (m, ps'@(ProcessState _ u)) = canonicalizeOnState ps
-        g = go1 (unUnionMap u)
+        g = go1 (UM.unUnionMap u)
     in  ((m, g), ps')
   go1 im = Graph (fmap (go2 im) im)
   go2 im = \case
     -- compaction will have made this a one-link jump
-    UnionEntryLink k ->
+    UM.EntryLink k ->
       case ILM.lookup k im of
         Nothing -> error ("Missing linked key: " ++ show k)
         Just v -> go2 im v
-    UnionEntryValue d -> d
+    UM.EntryValue d -> d
 
 -- | Compact the union map - compresses all chains to directly reference roots for faster lookup
 -- Returns a map of all rebound (non-root) ids to roots.
@@ -137,10 +123,10 @@ extract = state extractOnState
 
 lookupP :: UniqueId -> ProcessM e g (UniqueId, Elem g)
 lookupP i = do
-  val <- lookupUnionMapLM psUnionMapL i
+  val <- UM.lookupLM psUnionMapL i
   case val of
-    UnionMapLookupValMissing x -> throwError (ProcessErrMissing x)
-    UnionMapLookupValOk r d _ -> pure (r, d)
+    UM.LookupValMissing x -> throwError (ProcessErrMissing x)
+    UM.LookupValOk r d _ -> pure (r, d)
 
 data Duo a = Duo !a !a
   deriving stock (Eq, Show, Functor, Foldable, Traversable)
@@ -186,7 +172,7 @@ alignElems da db =
           pure (ElemNode h)
 
 -- | Callback to be provided to a union map to merge values of the same key by aligning their structures.
-alignMerge :: (Alignable e g) => UniqueId -> UnionMergeMany Duo (ProcessErr e g) (Elem g) (Seq Item, UniqueId)
+alignMerge :: (Alignable e g) => UniqueId -> UM.MergeMany Duo (ProcessErr e g) (Elem g) (Seq Item, UniqueId)
 alignMerge b mdx (Duo di dj) = res
  where
   res = fmap (\(v, s, w) -> ((w, s), v)) (runAlignM body b)
@@ -200,11 +186,11 @@ alignMerge b mdx (Duo di dj) = res
 mergeP :: (Alignable e g) => Item -> ProcessM e g (Seq Item)
 mergeP (Item children root) = do
   b <- gets psUnique
-  erb <- mergeManyUnionMapLM psUnionMapL (alignMerge b) root children
+  erb <- UM.mergeManyLM psUnionMapL (alignMerge b) root children
   case erb of
-    UnionMapMergeValMissing i -> throwError (ProcessErrMissing i)
-    UnionMapMergeValEmbed e -> throwError e
-    UnionMapMergeValMerged _ _ (r, i) -> modify' (\st -> st {psUnique = i}) $> r
+    UM.MergeValMissing i -> throwError (ProcessErrMissing i)
+    UM.MergeValEmbed e -> throwError e
+    UM.MergeValMerged _ _ (r, i) -> modify' (\st -> st {psUnique = i}) $> r
 
 freshP :: ProcessM e g UniqueId
 freshP = state (\st -> let uniq = psUnique st in (uniq, st {psUnique = succ uniq}))
@@ -227,10 +213,10 @@ constrainRecP = \case
 
 defineP :: Elem g -> UniqueId -> ProcessM e g ()
 defineP d i = do
-  val <- addUnionMapLM psUnionMapL i d
+  val <- UM.addLM psUnionMapL i d
   case val of
-    UnionMapAddValAdded -> pure ()
-    UnionMapAddValDuplicate -> throwError (ProcessErrDuplicate i)
+    UM.AddValAdded -> pure ()
+    UM.AddValDuplicate -> throwError (ProcessErrDuplicate i)
 
 handleEvent :: (Alignable e g) => Event g -> ProcessM e g ()
 handleEvent = \case

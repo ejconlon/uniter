@@ -21,25 +21,7 @@ import qualified Uniter.Example.Simple as Simple
 import Uniter.OrderedMap (OrderedMap)
 import qualified Uniter.OrderedMap as OM
 import Uniter.Reunitable.Driver (ReuniteSuccess (..), quickReuniteResult)
-import Uniter.UnionMap
-  ( Changed (..)
-  , UnionEquiv (..)
-  , UnionMap
-  , UnionMapAddVal (..)
-  , UnionMapLookupVal (..)
-  , UnionMapMergeVal (..)
-  , UnionMapTraceRes (..)
-  , UnionMergeOne
-  , addUnionMapM
-  , concatUnionMergeOne
-  , emptyUnionMap
-  , equivUnionMapM
-  , lookupUnionMapM
-  , mergeOneUnionMapM
-  , sizeUnionMap
-  , traceUnionMap
-  , valuesUnionMap
-  )
+import qualified Uniter.UnionMap as UM
 import Uniter.Unitable.Driver (quickUniteResult)
 
 newtype V = V {unV :: Int}
@@ -64,114 +46,114 @@ mapVV = ILM.fromList . fmap (bimap toV toV)
 multiMapVV :: [(Char, String)] -> IntLikeMap V (IntLikeSet V)
 multiMapVV = ILM.fromList . fmap (bimap toV setV)
 
-type UMV = UnionMap V (Max Int)
+type UMV = UM.UnionMap V (Max Int)
 
 emptyUMV :: UMV
-emptyUMV = emptyUnionMap
+emptyUMV = UM.empty
 
-mergeOneUMV :: UnionMergeOne Void (Max Int) ()
-mergeOneUMV = concatUnionMergeOne
+mergeOneUMV :: UM.MergeOne Void (Max Int) ()
+mergeOneUMV = UM.concatMergeOne
 
 testUmSimple :: TestTree
 testUmSimple = testUnit "UM simple" $ runS emptyUMV $ do
   -- start with empty map
-  testS $ \um -> sizeUnionMap um === 0
+  testS $ \um -> UM.size um === 0
   -- add 'a'
-  applyTestS (addUnionMapM (toV 'a') 1) $ \res um -> do
-    res === UnionMapAddValAdded
-    sizeUnionMap um === 1
-    traceUnionMap (toV 'a') um === UnionMapTraceResFound (toV 'a') 1 []
-    valuesUnionMap um === mapV [('a', 1)]
+  applyTestS (UM.addM (toV 'a') 1) $ \res um -> do
+    res === UM.AddValAdded
+    UM.size um === 1
+    UM.trace (toV 'a') um === UM.TraceResFound (toV 'a') 1 []
+    UM.values um === mapV [('a', 1)]
   -- lookup 'a'
-  applyTestS (lookupUnionMapM (toV 'a')) $ \res _ ->
-    res === UnionMapLookupValOk (toV 'a') 1 ChangedNo
+  applyTestS (UM.lookupM (toV 'a')) $ \res _ ->
+    res === UM.LookupValOk (toV 'a') 1 UM.ChangedNo
   -- try to add 'a' again
-  applyTestS (addUnionMapM (toV 'a') 1) $ \res um -> do
-    res === UnionMapAddValDuplicate
-    sizeUnionMap um === 1
+  applyTestS (UM.addM (toV 'a') 1) $ \res um -> do
+    res === UM.AddValDuplicate
+    UM.size um === 1
   -- add 'b' and 'c' and check them
-  _ <- applyS (addUnionMapM (toV 'b') 2)
-  _ <- applyS (addUnionMapM (toV 'c') 3)
+  _ <- applyS (UM.addM (toV 'b') 2)
+  _ <- applyS (UM.addM (toV 'c') 3)
   testS $ \um -> do
-    sizeUnionMap um === 3
-    traceUnionMap (toV 'b') um === UnionMapTraceResFound (toV 'b') 2 []
-    traceUnionMap (toV 'c') um === UnionMapTraceResFound (toV 'c') 3 []
-    valuesUnionMap um === mapV [('a', 1), ('b', 2), ('c', 3)]
-  applyTestS equivUnionMapM $ \(UnionEquiv fwd bwd) _ -> do
+    UM.size um === 3
+    UM.trace (toV 'b') um === UM.TraceResFound (toV 'b') 2 []
+    UM.trace (toV 'c') um === UM.TraceResFound (toV 'c') 3 []
+    UM.values um === mapV [('a', 1), ('b', 2), ('c', 3)]
+  applyTestS UM.equivM $ \(UM.Equiv fwd bwd) _ -> do
     fwd === multiMapVV [('a', ""), ('b', ""), ('c', "")]
     bwd === mapVV []
   -- merge 'a' and 'c'
-  applyTestS (mergeOneUnionMapM mergeOneUMV (toV 'a') (toV 'c')) $ \res um -> do
-    res === UnionMapMergeValMerged (toV 'a') 3 ()
-    sizeUnionMap um === 3
-    traceUnionMap (toV 'a') um === UnionMapTraceResFound (toV 'a') 3 []
-    traceUnionMap (toV 'b') um === UnionMapTraceResFound (toV 'b') 2 []
-    traceUnionMap (toV 'c') um === UnionMapTraceResFound (toV 'a') 3 [toV 'c']
-    valuesUnionMap um === mapV [('a', 3), ('b', 2)]
-  applyTestS equivUnionMapM $ \(UnionEquiv fwd bwd) _ -> do
+  applyTestS (UM.mergeOneM mergeOneUMV (toV 'a') (toV 'c')) $ \res um -> do
+    res === UM.MergeValMerged (toV 'a') 3 ()
+    UM.size um === 3
+    UM.trace (toV 'a') um === UM.TraceResFound (toV 'a') 3 []
+    UM.trace (toV 'b') um === UM.TraceResFound (toV 'b') 2 []
+    UM.trace (toV 'c') um === UM.TraceResFound (toV 'a') 3 [toV 'c']
+    UM.values um === mapV [('a', 3), ('b', 2)]
+  applyTestS UM.equivM $ \(UM.Equiv fwd bwd) _ -> do
     fwd === multiMapVV [('a', "c"), ('b', "")]
     bwd === mapVV [('c', 'a')]
   -- try to merge again
-  applyTestS (mergeOneUnionMapM mergeOneUMV (toV 'a') (toV 'c')) $ \res _ ->
-    res === UnionMapMergeValMerged (toV 'a') 3 ()
+  applyTestS (UM.mergeOneM mergeOneUMV (toV 'a') (toV 'c')) $ \res _ ->
+    res === UM.MergeValMerged (toV 'a') 3 ()
   -- and the other way around
-  applyTestS (mergeOneUnionMapM mergeOneUMV (toV 'c') (toV 'a')) $ \res _ ->
-    res === UnionMapMergeValMerged (toV 'a') 3 ()
+  applyTestS (UM.mergeOneM mergeOneUMV (toV 'c') (toV 'a')) $ \res _ ->
+    res === UM.MergeValMerged (toV 'a') 3 ()
   -- and a non-existent merge
-  applyTestS (mergeOneUnionMapM mergeOneUMV (toV 'b') (toV 'z')) $ \res _ ->
-    res === UnionMapMergeValMissing (toV 'z')
+  applyTestS (UM.mergeOneM mergeOneUMV (toV 'b') (toV 'z')) $ \res _ ->
+    res === UM.MergeValMissing (toV 'z')
   -- and creating merge
-  applyTestS (mergeOneUnionMapM mergeOneUMV (toV 'z') (toV 'b')) $ \res _ ->
-    res === UnionMapMergeValMerged (toV 'z') 2 ()
-  applyTestS equivUnionMapM $ \(UnionEquiv fwd bwd) _ -> do
+  applyTestS (UM.mergeOneM mergeOneUMV (toV 'z') (toV 'b')) $ \res _ ->
+    res === UM.MergeValMerged (toV 'z') 2 ()
+  applyTestS UM.equivM $ \(UM.Equiv fwd bwd) _ -> do
     fwd === multiMapVV [('a', "c"), ('z', "b")]
     bwd === mapVV [('b', 'z'), ('c', 'a')]
 
 testUmRec :: TestTree
 testUmRec = testUnit "UM rec" $ runS emptyUMV $ do
-  _ <- applyS (addUnionMapM (toV 'a') 1)
-  _ <- applyS (addUnionMapM (toV 'b') 2)
-  _ <- applyS (addUnionMapM (toV 'c') 3)
-  _ <- applyS (addUnionMapM (toV 'c') 3)
-  applyTestS (mergeOneUnionMapM mergeOneUMV (toV 'b') (toV 'c')) $ \res um -> do
-    res === UnionMapMergeValMerged (toV 'b') 3 ()
-    sizeUnionMap um === 3
-    traceUnionMap (toV 'a') um === UnionMapTraceResFound (toV 'a') 1 []
-    traceUnionMap (toV 'b') um === UnionMapTraceResFound (toV 'b') 3 []
-    traceUnionMap (toV 'c') um === UnionMapTraceResFound (toV 'b') 3 [toV 'c']
-    valuesUnionMap um === mapV [('a', 1), ('b', 3)]
-  applyTestS equivUnionMapM $ \(UnionEquiv fwd bwd) _ -> do
+  _ <- applyS (UM.addM (toV 'a') 1)
+  _ <- applyS (UM.addM (toV 'b') 2)
+  _ <- applyS (UM.addM (toV 'c') 3)
+  _ <- applyS (UM.addM (toV 'c') 3)
+  applyTestS (UM.mergeOneM mergeOneUMV (toV 'b') (toV 'c')) $ \res um -> do
+    res === UM.MergeValMerged (toV 'b') 3 ()
+    UM.size um === 3
+    UM.trace (toV 'a') um === UM.TraceResFound (toV 'a') 1 []
+    UM.trace (toV 'b') um === UM.TraceResFound (toV 'b') 3 []
+    UM.trace (toV 'c') um === UM.TraceResFound (toV 'b') 3 [toV 'c']
+    UM.values um === mapV [('a', 1), ('b', 3)]
+  applyTestS UM.equivM $ \(UM.Equiv fwd bwd) _ -> do
     fwd === multiMapVV [('a', ""), ('b', "c")]
     bwd === mapVV [('c', 'b')]
-  applyTestS (mergeOneUnionMapM mergeOneUMV (toV 'a') (toV 'b')) $ \res um -> do
-    res === UnionMapMergeValMerged (toV 'a') 3 ()
-    sizeUnionMap um === 3
-    traceUnionMap (toV 'a') um === UnionMapTraceResFound (toV 'a') 3 []
-    traceUnionMap (toV 'b') um === UnionMapTraceResFound (toV 'a') 3 [toV 'b']
-    traceUnionMap (toV 'c') um === UnionMapTraceResFound (toV 'a') 3 [toV 'b', toV 'c']
-    valuesUnionMap um === mapV [('a', 3)]
-  applyTestS equivUnionMapM $ \(UnionEquiv fwd bwd) _ -> do
+  applyTestS (UM.mergeOneM mergeOneUMV (toV 'a') (toV 'b')) $ \res um -> do
+    res === UM.MergeValMerged (toV 'a') 3 ()
+    UM.size um === 3
+    UM.trace (toV 'a') um === UM.TraceResFound (toV 'a') 3 []
+    UM.trace (toV 'b') um === UM.TraceResFound (toV 'a') 3 [toV 'b']
+    UM.trace (toV 'c') um === UM.TraceResFound (toV 'a') 3 [toV 'b', toV 'c']
+    UM.values um === mapV [('a', 3)]
+  applyTestS UM.equivM $ \(UM.Equiv fwd bwd) _ -> do
     fwd === multiMapVV [('a', "bc")]
     bwd === mapVV [('b', 'a'), ('c', 'a')]
 
 testUmTail :: TestTree
 testUmTail = testUnit "UM tail" $ runS emptyUMV $ do
   applyS $ do
-    _ <- addUnionMapM (toV 'a') 1
-    _ <- addUnionMapM (toV 'b') 2
-    _ <- addUnionMapM (toV 'c') 3
-    _ <- addUnionMapM (toV 'd') 4
-    _ <- mergeOneUnionMapM mergeOneUMV (toV 'c') (toV 'd')
-    _ <- mergeOneUnionMapM mergeOneUMV (toV 'b') (toV 'c')
-    _ <- mergeOneUnionMapM mergeOneUMV (toV 'a') (toV 'b')
+    _ <- UM.addM (toV 'a') 1
+    _ <- UM.addM (toV 'b') 2
+    _ <- UM.addM (toV 'c') 3
+    _ <- UM.addM (toV 'd') 4
+    _ <- UM.mergeOneM mergeOneUMV (toV 'c') (toV 'd')
+    _ <- UM.mergeOneM mergeOneUMV (toV 'b') (toV 'c')
+    _ <- UM.mergeOneM mergeOneUMV (toV 'a') (toV 'b')
     pure ()
   testS $ \um ->
-    traceUnionMap (toV 'd') um === UnionMapTraceResFound (toV 'a') 4 [toV 'b', toV 'c', toV 'd']
-  applyTestS equivUnionMapM $ \(UnionEquiv fwd bwd) _ -> do
+    UM.trace (toV 'd') um === UM.TraceResFound (toV 'a') 4 [toV 'b', toV 'c', toV 'd']
+  applyTestS UM.equivM $ \(UM.Equiv fwd bwd) _ -> do
     fwd === multiMapVV [('a', "bcd")]
     bwd === mapVV [('b', 'a'), ('c', 'a'), ('d', 'a')]
   testS $ \um ->
-    traceUnionMap (toV 'd') um === UnionMapTraceResFound (toV 'a') 4 [toV 'd']
+    UM.trace (toV 'd') um === UM.TraceResFound (toV 'a') 4 [toV 'd']
 
 testUmUnit :: TestTree
 testUmUnit =

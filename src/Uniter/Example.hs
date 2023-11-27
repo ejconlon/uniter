@@ -8,5 +8,5 @@ import qualified Uniter.Example.Simple
 
 main :: IO ()
 main = do
-  Uniter.Example.Simple.main
+  -- Uniter.Example.Simple.main
   Uniter.Example.Complex.main
